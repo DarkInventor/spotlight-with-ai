@@ -2,6 +2,8 @@ import CoreFoundation
 import SwiftUI
 import GoogleGenerativeAI
 import SwiftfulLoadingIndicators
+import ScreenCaptureKit
+import CoreMedia
 
 struct ContentView: View {
     @State private var searchText: String = ""
@@ -14,6 +16,7 @@ struct ContentView: View {
     @StateObject private var universalSearchManager = UniversalSearchManager()
     @State private var showingHotkeyInstructions = false
     @State private var showingUniversalResults = false
+    @State private var isCapturingScreenshot = false
     @Environment(\.colorScheme) private var colorScheme
     // Before running, please ensure you have added the GoogleGenerativeAI package.
     // In Xcode: File > Add Package Dependencies... > https://github.com/google/generative-ai-swift
@@ -22,12 +25,48 @@ struct ContentView: View {
     var body: some View {
         VStack(spacing: 16) {
             VStack(spacing: 8) {
-                SearchBar(text: $searchText, onSubmit: handleSearch, onImageDrop: handleImageDrop)
-                    .frame(maxWidth: .infinity)
-                    .padding(.horizontal, 20)
-                    .onChange(of: searchText) { newValue in
-                        handleUniversalSearchTextChange(newValue)
+                // Search bar with screenshot button
+                HStack(spacing: 12) {
+                    SearchBar(text: $searchText, onSubmit: handleSearch, onImageDrop: handleImageDrop)
+                        .frame(maxWidth: .infinity)
+                        .onChange(of: searchText) { newValue in
+                            handleUniversalSearchTextChange(newValue)
+                        }
+                    
+                    // Screenshot capture button
+                    Button(action: captureScreenshot) {
+                        ZStack {
+                            Circle()
+                                .fill(isCapturingScreenshot ? Color.green.opacity(0.2) : Color.gray.opacity(0.1))
+                                .frame(width: 46, height: 46)
+                                .overlay(
+                                    Circle()
+                                        .stroke(isCapturingScreenshot ? Color.green : Color.gray.opacity(0.3), lineWidth: 1)
+                                )
+                            
+                            if isCapturingScreenshot {
+                                ProgressView()
+                                    .scaleEffect(0.7)
+                                    .progressViewStyle(CircularProgressViewStyle(tint: .green))
+                            } else {
+                                Image(systemName: selectedImage != nil ? "camera.fill" : "camera")
+                                    .font(.system(size: 20, weight: .medium))
+                                    .foregroundColor(selectedImage != nil ? .green : (colorScheme == .light ? .gray.opacity(0.5) : .green.opacity(0.5)))
+                                    .padding()
+                                    .glassEffect()
+                                    .onHover { isHovered in
+                                        withAnimation(.easeInOut(duration: 0.2)) {
+                                            // You can add hover state management here if needed
+                                        }
+                                    }
+                            }
+                        }
                     }
+                    .buttonStyle(PlainButtonStyle())
+                    .disabled(isCapturingScreenshot)
+                    .help("Capture Screenshot")
+                }
+                .padding(.horizontal, 20)
                 
                 if let selectedImage = selectedImage {
                     HStack {
@@ -182,6 +221,117 @@ struct ContentView: View {
             }
         } message: {
             Text("🚀 Press Cmd+Shift+Space from anywhere to open Searchfast!\n\nFor global access, please grant Accessibility permissions:\n\n1. Click 'Open Settings' below\n2. Find 'Searchfast' in the list\n3. Toggle it ON\n\nThis allows the hotkey to work when other apps are focused.")
+        }
+    }
+
+    private func captureScreenshot() {
+        print("📸 CAPTURING SCREENSHOT - SAVING DOGS & CATS!")
+        
+        isCapturingScreenshot = true
+        
+        // Hide the current window temporarily for clean screenshot
+        if let windowManager = NSApp.delegate as? WindowManager {
+            windowManager.hideWindow()
+        }
+        
+        // Wait a moment for window to hide, then capture
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+            self.performScreenCapture()
+        }
+    }
+    
+    private func performScreenCapture() {
+        Task {
+            do {
+                print("📸 Starting ScreenCaptureKit capture...")
+                
+                // Check if ScreenCaptureKit is available (macOS 12.3+)
+                guard #available(macOS 12.3, *) else {
+                    print("❌ ScreenCaptureKit requires macOS 12.3 or later")
+                    await MainActor.run {
+                        isCapturingScreenshot = false
+                        showWindow()
+                    }
+                    return
+                }
+                
+                // Get all displays and windows
+                let content = try await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: true)
+                
+                guard let display = content.displays.first else {
+                    print("❌ No displays found")
+                    await MainActor.run {
+                        isCapturingScreenshot = false
+                        showWindow()
+                    }
+                    return
+                }
+                
+                // Create configuration for screenshot
+                let config = SCStreamConfiguration()
+                config.width = Int(display.width)
+                config.height = Int(display.height)
+                config.pixelFormat = kCVPixelFormatType_32BGRA
+                config.showsCursor = true
+                
+                // Create filter with the display (exclude our own window)
+                let filter = SCContentFilter(display: display, excludingWindows: [])
+                
+                // Take screenshot using the correct API
+                let cgImage = try await SCScreenshotManager.captureImage(
+                    contentFilter: filter,
+                    configuration: config
+                )
+                
+                // Convert to NSImage
+                let screenshot = NSImage(cgImage: cgImage, size: NSSize(width: cgImage.width, height: cgImage.height))
+                
+                await MainActor.run {
+                    // Set the captured image
+                    withAnimation {
+                        self.selectedImage = screenshot
+                    }
+                    
+                    isCapturingScreenshot = false
+                    
+                    // Show the window again
+                    showWindow()
+                    
+                    // Auto-focus search field for immediate interaction
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                        NotificationCenter.default.post(name: NSNotification.Name("FocusSearchField"), object: nil)
+                    }
+                    
+                    print("✅ SCREENSHOT CAPTURED & ATTACHED! Dogs & Cats SAVED!")
+                }
+                
+            } catch {
+                print("❌ Screenshot failed: \(error)")
+                await MainActor.run {
+                    isCapturingScreenshot = false
+                    showWindow()
+                    
+                    // Show error to user
+                    let alert = NSAlert()
+                    alert.messageText = "Screenshot Permission Required"
+                    alert.informativeText = "Please grant Screen Recording permission in System Preferences > Security & Privacy > Screen Recording to enable screenshot capture."
+                    alert.addButton(withTitle: "Open Settings")
+                    alert.addButton(withTitle: "Cancel")
+                    
+                    if alert.runModal() == .alertFirstButtonReturn {
+                        // Open Screen Recording settings
+                        if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture") {
+                            NSWorkspace.shared.open(url)
+                        }
+                    }
+                }
+            }
+        }
+    }
+    
+    private func showWindow() {
+        if let windowManager = NSApp.delegate as? WindowManager {
+            windowManager.forceShowWindow()
         }
     }
 

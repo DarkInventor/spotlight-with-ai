@@ -3,6 +3,18 @@
 <plist version="1.0">
 <dict>
 	<key>UIBackgroundModes</key>
-	<array/>
+	<array>
+		<string>fetch</string>
+		<string>processing</string>
+		<string>external-accessory</string>
+		<string>location</string>
+		<string>push-to-talk</string>
+		<string>remote-notification</string>
+		<string>bluetooth-central</string>
+		<string>nearby-interaction</string>
+		<string>voip</string>
+		<string>audio</string>
+		<string>bluetooth-peripheral</string>
+	</array>
 </dict>
 </plist>

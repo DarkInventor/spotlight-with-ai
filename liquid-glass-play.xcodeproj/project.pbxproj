@@ -9,6 +9,7 @@
 /* Begin PBXBuildFile section */
 		DFA1DEB92E0FCECE0070E4F5 /* GoogleGenerativeAI in Frameworks */ = {isa = PBXBuildFile; productRef = DFA1DEB82E0FCECE0070E4F5 /* GoogleGenerativeAI */; };
 		DFA1DEC02E0FDB530070E4F5 /* SwiftfulLoadingIndicators in Frameworks */ = {isa = PBXBuildFile; productRef = DFA1DEBF2E0FDB530070E4F5 /* SwiftfulLoadingIndicators */; };
+		DFA1DECC2E0FFF410070E4F5 /* ScreenCaptureKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = DFA1DECB2E0FFF410070E4F5 /* ScreenCaptureKit.framework */; platformFilters = (macos, ); };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -33,6 +34,7 @@
 		DF0937892E0E940A00FF89F9 /* liquid-glass-playTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "liquid-glass-playTests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
 		DF0937932E0E940A00FF89F9 /* liquid-glass-playUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "liquid-glass-playUITests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
 		DF2A7B0A2E0FAC9100B6C8F7 /* FoundationModels.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = FoundationModels.framework; path = Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS26.0.sdk/System/Library/Frameworks/FoundationModels.framework; sourceTree = DEVELOPER_DIR; };
+		DFA1DECB2E0FFF410070E4F5 /* ScreenCaptureKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = ScreenCaptureKit.framework; path = System/Library/Frameworks/ScreenCaptureKit.framework; sourceTree = SDKROOT; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -72,6 +74,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				DFA1DEB92E0FCECE0070E4F5 /* GoogleGenerativeAI in Frameworks */,
+				DFA1DECC2E0FFF410070E4F5 /* ScreenCaptureKit.framework in Frameworks */,
 				DFA1DEC02E0FDB530070E4F5 /* SwiftfulLoadingIndicators in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -117,6 +120,7 @@
 		DF2E58E02E0EF47000AED614 /* Frameworks */ = {
 			isa = PBXGroup;
 			children = (
+				DFA1DECB2E0FFF410070E4F5 /* ScreenCaptureKit.framework */,
 				DF2A7B0A2E0FAC9100B6C8F7 /* FoundationModels.framework */,
 			);
 			name = Frameworks;
