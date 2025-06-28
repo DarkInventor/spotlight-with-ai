@@ -1,0 +1,67 @@
+flowchart TD
+    A[User presses Cmd+J] --> B[App launches with search bar focused]
+    
+    B --> C{User starts typing}
+    
+    C --> D[Search Mode]
+    C --> E[Chat Mode - starts with '?' or 'chat:']
+    
+    D --> F[Real-time search suggestions appear]
+    F --> G{User continues typing or selects?}
+    
+    G --> H[Continues typing]
+    G --> I[Selects suggestion with arrow keys]
+    G --> J[Clicks on suggestion]
+    
+    H --> K[Updated results list]
+    K --> L{User action?}
+    
+    I --> M[Item highlighted]
+    J --> M
+    M --> N{User presses Enter or clicks?}
+    
+    N --> O[Execute action - open file/app/URL]
+    N --> P[Show preview in right pane]
+    
+    E --> Q[Chat interface appears]
+    Q --> R[User types message]
+    R --> S[User presses Enter or clicks send]
+    S --> T[AI processing indicator shows]
+    T --> U[AI response appears in chat bubble]
+    U --> V{User continues conversation?}
+    
+    V --> W[Types follow-up message]
+    V --> X[Switches back to search mode]
+    V --> Y[Closes app with Escape]
+    
+    W --> S
+    X --> D
+    
+    L --> Z[Presses Tab to switch to chat mode]
+    L --> AA[Presses Escape to close]
+    L --> BB[Right-clicks for context menu]
+    
+    Z --> Q
+    BB --> CC[Context menu appears]
+    CC --> DD[User selects action]
+    DD --> EE[Action executed]
+    
+    O --> FF{Keep app open?}
+    P --> FF
+    EE --> FF
+    Y --> GG[App closes/minimizes]
+    AA --> GG
+    
+    FF --> HH[App stays open for more actions]
+    FF --> GG
+    
+    HH --> II[User continues with new search/chat]
+    II --> C
+    
+    style A fill:#e1f5fe
+    style B fill:#f3e5f5
+    style D fill:#e8f5e8
+    style E fill:#fff3e0
+    style Q fill:#fff3e0
+    style O fill:#e0f2f1
+    style GG fill:#ffebee
