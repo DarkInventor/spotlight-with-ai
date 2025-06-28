@@ -10,6 +10,24 @@ import SwiftUI
 import AppKit
 import ApplicationServices
 
+// App delegate to handle background operations
+class AppDelegate: NSObject, NSApplicationDelegate {
+    static let shared = AppDelegate()
+    
+    func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
+        // Don't quit when window closes - stay in background
+        return false
+    }
+    
+    func applicationDidFinishLaunching(_ notification: Notification) {
+        print("🚀 App finished launching - ready for background operation")
+    }
+    
+    func applicationWillTerminate(_ notification: Notification) {
+        print("👋 App terminating")
+    }
+}
+
 // Custom borderless window class that ALWAYS can become key window (like Spotlight)
 class SpotlightWindow: NSWindow {
     override var canBecomeKey: Bool {
@@ -57,37 +75,36 @@ struct liquid_glass_playApp: App {
         .defaultPosition(.center)
         .defaultSize(width: 640, height: 72)
         .commands {
-            CommandGroup(replacing: .newItem) {
-                // Primary toggle command in File menu
-                Button("AI Spotlight") {
-                    windowManager.toggleWindow()
-                }
-                .keyboardShortcut("j", modifiers: .command)
-            }
-            
             CommandGroup(after: .windowArrangement) {
                 // Window menu commands
                 WindowCommands(windowManager: windowManager)
+                
+                Divider()
+                
+                Button("Setup Global Hotkey...") {
+                    NotificationCenter.default.post(name: NSNotification.Name("ShowHotkeyInstructions"), object: nil)
+                }
             }
         }
     }
 }
 
 #if canImport(AppKit)
-class WindowManager: ObservableObject {
+class WindowManager: NSObject, ObservableObject, NSWindowDelegate {
     @Published var isVisible: Bool = false
     @Published var isConfigured: Bool = false
     private var window: NSWindow?
     private var statusItem: NSStatusItem?
+    private var justOpened: Bool = false
 
     
-    init() {
+    override init() {
+        super.init()
         setupMenuBarIcon()
         setupGlobalHotkey()
+        setupBackgroundOperation()
         
         // Start hidden - only show when hotkey is pressed
-        print("🎯 App started. Press Cmd+J to show AI Spotlight")
-        print("💡 Keyboard shortcuts work via menu commands (no accessibility permissions needed)")
     }
     
     deinit {
@@ -103,14 +120,124 @@ class WindowManager: ObservableObject {
             button.image = NSImage(systemSymbolName: "magnifyingglass", accessibilityDescription: "AI Spotlight")
             button.action = #selector(toggleWindow)
             button.target = self
-            button.toolTip = "Click or press Cmd+J to open AI Spotlight"
+            button.toolTip = "Searchfast - Cmd+Shift+Space to toggle, Cmd+J to close"
         }
+        
+        // Add menu to status item
+        let menu = NSMenu()
+        menu.addItem(NSMenuItem(title: "Show AI Spotlight", action: #selector(showWindowFromMenu), keyEquivalent: ""))
+        menu.addItem(NSMenuItem.separator())
+
+        menu.addItem(NSMenuItem(title: "Setup Global Hotkey...", action: #selector(showHotkeyInstructions), keyEquivalent: ""))
+        menu.addItem(NSMenuItem.separator())
+        menu.addItem(NSMenuItem(title: "Quit Searchfast", action: #selector(quitApp), keyEquivalent: "q"))
+        
+        // Set target for menu items
+        for item in menu.items {
+            item.target = self
+        }
+        
+        statusItem?.menu = menu
+    }
+    
+
+    
+    @objc func showHotkeyInstructions() {
+        // Post notification to show instructions
+        NotificationCenter.default.post(name: NSNotification.Name("ShowHotkeyInstructions"), object: nil)
+    }
+    
+    @objc func quitApp() {
+        NSApplication.shared.terminate(nil)
+    }
+    
+    private func setupBackgroundOperation() {
+        // Configure app to run in background
+        NSApp.setActivationPolicy(.accessory) // This makes the app not appear in the dock
+        
+        // Handle app becoming active/inactive
+        NotificationCenter.default.addObserver(
+            forName: NSApplication.didBecomeActiveNotification,
+            object: nil,
+            queue: .main
+        ) { _ in
+            print("🔄 App became active")
+        }
+        
+        NotificationCenter.default.addObserver(
+            forName: NSApplication.didResignActiveNotification,
+            object: nil,
+            queue: .main
+        ) { _ in
+            print("🔄 App resigned active - continuing in background")
+        }
+        
+        // Prevent app from terminating when window closes
+        NSApp.delegate = AppDelegate.shared
     }
     
     @objc func toggleWindow() {
         if isVisible {
             hideWindow()
         } else {
+            forceShowWindow()
+        }
+    }
+    
+    func forceShowWindow() {
+        guard let window = window else { return }
+        
+        isVisible = true
+        justOpened = true
+        
+        // Force the app to become active and bring window to front
+        NSApp.setActivationPolicy(.regular)
+        NSApp.activate(ignoringOtherApps: true)
+        
+        // Set window to high level but not so high that it blocks drag operations
+        window.level = NSWindow.Level(Int(CGWindowLevelForKey(.floatingWindow)) + 1)
+        window.collectionBehavior = [.canJoinAllSpaces, .stationary, .fullScreenAuxiliary]
+        
+        // Center and show window
+        centerWindow()
+        window.makeKeyAndOrderFront(nil)
+        
+        // NUCLEAR FOCUS STRATEGY - SAVE THE CATS!
+        DispatchQueue.main.async {
+            NotificationCenter.default.post(name: NSNotification.Name("FocusSearchField"), object: nil)
+            self.findAndFocusTextFieldDirectly()
+        }
+        
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+            NotificationCenter.default.post(name: NSNotification.Name("FocusSearchField"), object: nil)
+            self.findAndFocusTextFieldDirectly()
+        }
+        
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+            NotificationCenter.default.post(name: NSNotification.Name("FocusSearchField"), object: nil)
+            self.findAndFocusTextFieldDirectly()
+            // Return to accessory mode after ensuring focus
+            NSApp.setActivationPolicy(.accessory)
+        }
+        
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+            NotificationCenter.default.post(name: NSNotification.Name("FocusSearchField"), object: nil)
+            self.findAndFocusTextFieldDirectly()
+        }
+        
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+            NotificationCenter.default.post(name: NSNotification.Name("FocusSearchField"), object: nil)
+            self.findAndFocusTextFieldDirectly()
+        }
+        
+        // Reset the justOpened flag after 1 second
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+            self.justOpened = false
+        }
+    }
+    
+    @objc func showWindowFromMenu() {
+        if !isVisible {
             showWindow()
         }
     }
@@ -125,7 +252,6 @@ class WindowManager: ObservableObject {
             guard var window = NSApplication.shared.windows.first(where: { 
                 !$0.className.contains("StatusBar") && $0.contentView != nil
             }) else {
-                print("❌ Could not find main window")
                 return
             }
             
@@ -167,6 +293,10 @@ class WindowManager: ObservableObject {
             window.collectionBehavior = [.canJoinAllSpaces, .stationary, .fullScreenAuxiliary, .ignoresCycle]
             window.isMovable = false
             
+            // Set up delegate for window events (like losing focus)
+            // Temporarily disabled to fix immediate closing issue
+            // window.delegate = self
+            
             // Ensure completely transparent window frame
             window.alphaValue = 1.0
             window.ignoresMouseEvents = false
@@ -186,10 +316,6 @@ class WindowManager: ObservableObject {
             window.canHide = false
             window.hidesOnDeactivate = false
             
-            // Force key window capability
-            print("🔍 Window canBecomeKey: \(window.canBecomeKey)")
-            print("🔍 Window canBecomeMain: \(window.canBecomeMain)")
-            
             // Set initial size - Authentic Spotlight dimensions
             let windowSize = NSSize(width: 640, height: 72)
             window.setContentSize(windowSize)
@@ -202,7 +328,6 @@ class WindowManager: ObservableObject {
             self.isVisible = false
             
             self.isConfigured = true
-            print("🪟 Window configured and hidden. Ready for Cmd+J")
             
             // Setup escape key monitoring once window is ready
             self.setupEscapeKeyMonitor()
@@ -210,81 +335,20 @@ class WindowManager: ObservableObject {
     }
     
     func showWindow() {
-        DispatchQueue.main.async { [weak self] in
-            guard let self = self, let window = self.window else { 
-                print("❌ No window to show")
-                return 
-            }
-            
-            print("👀 Showing AI Spotlight...")
-            
-            self.isVisible = true
-            
-            // Center and show window with proper key window setup
-            self.centerWindow()
-            
-            // First check if window can become key
-            print("🔍 About to show window - canBecomeKey: \(window.canBecomeKey)")
-            
-            if window.canBecomeKey {
-                window.makeKeyAndOrderFront(nil)
-                NSApp.activate(ignoringOtherApps: true)
-                print("✅ Window made key successfully")
-            } else {
-                // Force show even if can't become key, then try to fix it
-                window.orderFront(nil)
-                NSApp.activate(ignoringOtherApps: true)
-                print("⚠️ Window can't become key, forcing order front")
-                
-                // Try to fix key window status
-                DispatchQueue.main.async {
-                    window.makeKeyAndOrderFront(nil)
-                }
-            }
-            
-            // Aggressive focus strategy - immediate and repeated attempts
-            NotificationCenter.default.post(name: NSNotification.Name("FocusSearchField"), object: nil)
-            
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.02) {
-                NotificationCenter.default.post(name: NSNotification.Name("FocusSearchField"), object: nil)
-            }
-            
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
-                NotificationCenter.default.post(name: NSNotification.Name("FocusSearchField"), object: nil)
-            }
-            
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                NotificationCenter.default.post(name: NSNotification.Name("FocusSearchField"), object: nil)
-            }
-            
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
-                NotificationCenter.default.post(name: NSNotification.Name("FocusSearchField"), object: nil)
-            }
-            
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                NotificationCenter.default.post(name: NSNotification.Name("FocusSearchField"), object: nil)
-                NotificationCenter.default.post(name: NSNotification.Name("ForceSelectText"), object: nil)
-                
-                // Nuclear option: Force focus at AppKit level
-                if let contentView = window.contentView {
-                    self.findAndFocusTextField(in: contentView)
-                }
-            }
-        }
+        forceShowWindow()
     }
     
     func hideWindow() {
-        DispatchQueue.main.async { [weak self] in
-            guard let self = self, let window = self.window else { return }
-            
-            print("🙈 Hiding AI Spotlight...")
-            
-            self.isVisible = false
-            window.orderOut(nil)
-            
-            // Clear search when hiding
-            NotificationCenter.default.post(name: NSNotification.Name("ClearSearch"), object: nil)
-        }
+        guard let window = window else { return }
+        
+        isVisible = false
+        
+        // Reset window level to normal floating
+        window.level = .floating
+        window.orderOut(nil)
+        
+        // Clear search when hiding
+        NotificationCenter.default.post(name: NSNotification.Name("ClearSearch"), object: nil)
     }
     
     func updateWindowHeight(_ height: CGFloat) {
@@ -309,48 +373,95 @@ class WindowManager: ObservableObject {
     }
     
     private func setupGlobalHotkey() {
-        // Check if we have accessibility permissions for global monitoring
-        let hasAccessibility = AXIsProcessTrusted()
-        
-        if hasAccessibility {
-            setupNSEventHotkey()
-            print("✅ Global hotkey monitoring enabled (accessibility permissions granted)")
-        } else {
-            print("⚠️ Global hotkey monitoring disabled (no accessibility permissions)")
-            print("💡 Menu shortcuts (Cmd+K) will still work when app is focused")
-        }
+        setupCarbonHotkey()
+        setupClickOutsideMonitoring()
     }
     
-    private func setupNSEventHotkey() {
-        // NSEvent approach for global hotkeys (requires accessibility permissions)
-        NSEvent.addGlobalMonitorForEvents(matching: [.keyDown]) { [weak self] event in
-            if event.modifierFlags.contains(.command) && event.keyCode == 38 { // Cmd+J
-                print("🔥 Global hotkey (Cmd+J) detected!")
-                DispatchQueue.main.async {
-                    self?.toggleWindow()
+    private func setupClickOutsideMonitoring() {
+        // Monitor global mouse clicks to hide window when clicking outside
+        NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) { [weak self] event in
+            if let window = self?.window, self?.isVisible == true {
+                let clickLocation = event.locationInWindow
+                let windowFrame = window.frame
+                
+                // Convert click location to screen coordinates
+                if let screen = window.screen {
+                    let screenClickLocation = NSPoint(
+                        x: clickLocation.x + windowFrame.origin.x,
+                        y: clickLocation.y + windowFrame.origin.y
+                    )
+                    
+                    // Check if click is outside our window
+                    if !windowFrame.contains(screenClickLocation) {
+                        DispatchQueue.main.async {
+                            self?.hideWindow()
+                        }
+                    }
                 }
             }
         }
+    }
+    
+    private func setupCarbonHotkey() {
+        let accessEnabled = AXIsProcessTrusted()
         
-        // Also monitor local events for when the app is focused
+        if !accessEnabled {
+            setupLocalHotkey()
+            
+            // Set up a timer to check permissions periodically
+            Timer.scheduledTimer(withTimeInterval: 2.0, repeats: true) { [weak self] timer in
+                if AXIsProcessTrusted() {
+                    self?.setupGlobalMonitoring()
+                    timer.invalidate()
+                }
+            }
+            return
+        }
+        
+        setupGlobalMonitoring()
+        setupLocalHotkey()
+    }
+    
+    private func setupGlobalMonitoring() {
+        NSEvent.addGlobalMonitorForEvents(matching: [.keyDown]) { [weak self] event in
+            if event.modifierFlags.contains([.command, .shift]) && event.keyCode == 49 { // Cmd+Shift+Space
+                DispatchQueue.main.async {
+                    self?.toggleWindow()
+                }
+            } else if event.modifierFlags.contains(.command) && event.keyCode == 38 { // Cmd+J
+                if self?.isVisible == true {
+                    DispatchQueue.main.async {
+                        self?.hideWindow()
+                    }
+                }
+            }
+        }
+    }
+    
+    private func setupLocalHotkey() {
         NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
-            if event.modifierFlags.contains(.command) && event.keyCode == 38 { // Cmd+J
-                print("🔥 Local hotkey (Cmd+J) detected!")
+            if event.modifierFlags.contains([.command, .shift]) && event.keyCode == 49 { // Cmd+Shift+Space
                 DispatchQueue.main.async {
                     self?.toggleWindow()
                 }
                 return nil // Consume the event
+            } else if event.modifierFlags.contains(.command) && event.keyCode == 38 { // Cmd+J
+                if self?.isVisible == true {
+                    DispatchQueue.main.async {
+                        self?.hideWindow()
+                    }
+                    return nil // Consume the event
+                }
             }
             return event
         }
-        
-        print("⌨️ Global and local hotkey monitors setup complete")
     }
+    
+
     
     private func setupEscapeKeyMonitor() {
         NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
             if event.keyCode == 53 && self?.isVisible == true { // Escape key
-                print("🚫 Escape pressed, hiding window")
                 self?.hideWindow()
                 return nil // Consume the event
             }
@@ -358,18 +469,71 @@ class WindowManager: ObservableObject {
         }
     }
     
-    private func findAndFocusTextField(in view: NSView) {
+
+    // MARK: - Direct Focus Methods
+    
+    private func findAndFocusTextFieldDirectly() {
+        guard let window = window, let contentView = window.contentView else { return }
+        findTextFieldInView(contentView)
+    }
+    
+    private func findTextFieldInView(_ view: NSView) {
+        // Look for NSTextField in the view hierarchy
         for subview in view.subviews {
             if let textField = subview as? NSTextField {
                 DispatchQueue.main.async {
                     self.window?.makeFirstResponder(textField)
+                    textField.becomeFirstResponder()
                     textField.selectText(nil)
-                    print("🎯 NUCLEAR FOCUS: Found and focused text field directly")
                 }
                 return
             }
             // Recursively search subviews
-            findAndFocusTextField(in: subview)
+            findTextFieldInView(subview)
+        }
+    }
+    
+    // MARK: - NSWindowDelegate
+    
+    func windowDidResignKey(_ notification: Notification) {
+        // Hide window when it loses key status (user clicked elsewhere)
+        // But only if it wasn't just opened
+        if isVisible && !justOpened {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak self] in
+                // Only hide if we're still not the key window after the delay
+                if let window = self?.window, !window.isKeyWindow && self?.isVisible == true && self?.justOpened == false {
+                    // Check if any of our app's windows are key (to avoid hiding during internal focus changes)
+                    let hasKeyWindow = NSApp.windows.contains { $0.isKeyWindow && $0.contentView != nil }
+                    if !hasKeyWindow {
+                        self?.hideWindow()
+                    }
+                }
+            }
+        }
+    }
+    
+    func windowDidResignMain(_ notification: Notification) {
+        // Don't hide on resignMain as it can interfere with focus
+        // Let windowDidResignKey handle the hiding
+    }
+    
+    func windowDidBecomeKey(_ notification: Notification) {
+        // When window becomes key, ensure search field gets focus
+        if isVisible {
+            DispatchQueue.main.async {
+                NotificationCenter.default.post(name: NSNotification.Name("FocusSearchField"), object: nil)
+                self.findAndFocusTextFieldDirectly()
+            }
+            
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+                NotificationCenter.default.post(name: NSNotification.Name("FocusSearchField"), object: nil)
+                self.findAndFocusTextFieldDirectly()
+            }
+            
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                NotificationCenter.default.post(name: NSNotification.Name("FocusSearchField"), object: nil)
+                self.findAndFocusTextFieldDirectly()
+            }
         }
     }
     
@@ -404,7 +568,6 @@ struct WindowCommands: View {
             Button(windowManager.isVisible ? "Hide AI Spotlight" : "Show AI Spotlight") {
                 windowManager.toggleWindow()
             }
-            .keyboardShortcut("j", modifiers: .command)
             
             Divider()
             

@@ -62,6 +62,22 @@ struct FocusableTextField: NSViewRepresentable {
         // Store reference for focus restoration
         context.coordinator.textField = textField
         
+        // Set up notification observer for focus requests
+        NotificationCenter.default.addObserver(
+            context.coordinator,
+            selector: #selector(context.coordinator.handleFocusRequest),
+            name: NSNotification.Name("FocusSearchField"),
+            object: nil
+        )
+        
+        // IMMEDIATE FOCUS - SAVE THE CATS!
+        DispatchQueue.main.async {
+            if let window = textField.window {
+                window.makeFirstResponder(textField)
+                textField.selectText(nil)
+            }
+        }
+        
         return textField
     }
     
@@ -116,14 +132,43 @@ struct FocusableTextField: NSViewRepresentable {
             return false
         }
         
+        @objc func handleFocusRequest() {
+            forceFocus()
+        }
+        
         func forceFocus() {
             DispatchQueue.main.async { [weak self] in
                 if let textField = self?.textField, let window = textField.window {
+                    // NUCLEAR FOCUS STRATEGY - SAVE THE CATS!
+                    
+                    // Force the window to be key first
+                    window.makeKeyAndOrderFront(nil)
+                    NSApp.activate(ignoringOtherApps: true)
+                    
+                    // Multiple aggressive focus attempts
+                    let _ = textField.becomeFirstResponder()
                     window.makeFirstResponder(textField)
-                    textField.selectText(nil) // Select all text for immediate typing
+                    textField.selectText(nil)
                     self?.parent.isFieldFocused = true
+                    
+                    // Repeated attempts with increasing delays
+                    for delay in [0.01, 0.05, 0.1, 0.2, 0.3] {
+                        DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
+                            if let textField = self?.textField, let window = textField.window {
+                                window.makeKeyAndOrderFront(nil)
+                                window.makeFirstResponder(textField)
+                                let _ = textField.becomeFirstResponder()
+                                textField.selectText(nil)
+                                self?.parent.isFieldFocused = true
+                            }
+                        }
+                    }
                 }
             }
+        }
+        
+        deinit {
+            NotificationCenter.default.removeObserver(self)
         }
     }
 }
@@ -136,6 +181,7 @@ struct SearchBar: View {
     @Environment(\.colorScheme) private var colorScheme
     @State private var isDragOver = false
     @State private var showingImagePicker = false
+
     
     var body: some View {
         if #available(macOS 26.0, *) {
@@ -151,6 +197,7 @@ struct SearchBar: View {
                     onSubmit: onSubmit
                 )
                 .focused($isFieldFocused)
+
                 
                 Spacer()
                 
@@ -186,11 +233,13 @@ struct SearchBar: View {
                     .glassEffect()
                     .overlay(
                         RoundedRectangle(cornerRadius: 36)
-                            .stroke(isDragOver ? Color.blue.opacity(0.6) : Color.clear, lineWidth: 2)
+                            .stroke(isDragOver ? Color.blue.opacity(0.8) : Color.clear, lineWidth: 3)
                     )
+                    .scaleEffect(isDragOver ? 1.02 : 1.0)
+                    .animation(.easeInOut(duration: 0.2), value: isDragOver)
             )
             .clipShape(RoundedRectangle(cornerRadius: 36)) // Clip the view for rounded corners
-            .onDrop(of: [.image, .fileURL], isTargeted: $isDragOver) { providers in
+            .onDrop(of: [.image, .fileURL, .data], isTargeted: $isDragOver) { providers in
                 handleDrop(providers: providers)
             }
             .onReceive(NotificationCenter.default.publisher(for: Notification.Name("FocusSearchField"))) { _ in
@@ -209,30 +258,58 @@ struct SearchBar: View {
     }
     
     private func handleDrop(providers: [NSItemProvider]) -> Bool {
+        // Try different type identifiers for maximum compatibility
+        let imageTypes = [
+            "public.image",
+            "public.png",
+            "public.jpeg",
+            "public.gif",
+            "public.tiff",
+            "com.apple.pict"
+        ]
+        
         for provider in providers {
-            if provider.hasItemConformingToTypeIdentifier("public.image") {
-                provider.loadItem(forTypeIdentifier: "public.image", options: nil) { item, error in
-                    if let data = item as? Data, let image = NSImage(data: data) {
-                        DispatchQueue.main.async {
-                            onImageDrop?(image)
-                        }
-                    } else if let url = item as? URL, let image = NSImage(contentsOf: url) {
-                        DispatchQueue.main.async {
-                            onImageDrop?(image)
+            // First try direct image types
+            for imageType in imageTypes {
+                if provider.hasItemConformingToTypeIdentifier(imageType) {
+                    provider.loadItem(forTypeIdentifier: imageType, options: nil) { item, error in
+                        if let data = item as? Data, let image = NSImage(data: data) {
+                            DispatchQueue.main.async {
+                                onImageDrop?(image)
+                            }
+                        } else if let url = item as? URL, let image = NSImage(contentsOf: url) {
+                            DispatchQueue.main.async {
+                                onImageDrop?(image)
+                            }
                         }
                     }
+                    return true
                 }
-                return true
-            } else if provider.hasItemConformingToTypeIdentifier("public.file-url") {
+            }
+            
+            // Then try file URLs
+            if provider.hasItemConformingToTypeIdentifier("public.file-url") {
                 provider.loadItem(forTypeIdentifier: "public.file-url", options: nil) { item, error in
                     if let url = item as? URL {
-                        let supportedTypes = ["png", "jpg", "jpeg", "gif", "bmp", "tiff", "webp"]
+                        let supportedTypes = ["png", "jpg", "jpeg", "gif", "bmp", "tiff", "webp", "heic", "heif"]
                         if supportedTypes.contains(url.pathExtension.lowercased()) {
                             if let image = NSImage(contentsOf: url) {
                                 DispatchQueue.main.async {
                                     onImageDrop?(image)
                                 }
                             }
+                        }
+                    }
+                }
+                return true
+            }
+            
+            // Finally try raw data
+            if provider.hasItemConformingToTypeIdentifier("public.data") {
+                provider.loadItem(forTypeIdentifier: "public.data", options: nil) { item, error in
+                    if let data = item as? Data, let image = NSImage(data: data) {
+                        DispatchQueue.main.async {
+                            onImageDrop?(image)
                         }
                     }
                 }

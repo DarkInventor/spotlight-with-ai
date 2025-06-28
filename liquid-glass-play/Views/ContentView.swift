@@ -11,6 +11,7 @@ struct ContentView: View {
     @State private var isCopied = false
     @State private var selectedImage: NSImage? = nil
     @StateObject private var memoryManager = MemoryManager()
+    @State private var showingHotkeyInstructions = false
     @Environment(\.colorScheme) private var colorScheme
     // Before running, please ensure you have added the GoogleGenerativeAI package.
     // In Xcode: File > Add Package Dependencies... > https://github.com/google/generative-ai-swift
@@ -103,6 +104,12 @@ struct ContentView: View {
             .frame(maxWidth: .infinity, minHeight: 200, maxHeight: .infinity)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("ShowHotkeyInstructions"))) { _ in
+            showingHotkeyInstructions = true
+        }
+        .onAppear {
+            checkAndShowHotkeyInstructions()
+        }
         .alert("Save Conversation History?", isPresented: $memoryManager.showingPermissionAlert) {
             Button("Allow") {
                 memoryManager.grantPermission()
@@ -112,6 +119,16 @@ struct ContentView: View {
             }
         } message: {
             Text("Would you like to save your conversation history to a local file for better context? This helps the AI remember your previous questions. The file will be saved in your Documents folder.")
+        }
+        .alert("Global Hotkey Setup", isPresented: $showingHotkeyInstructions) {
+            Button("Open Settings") {
+                openAccessibilitySettings()
+            }
+            Button("Later", role: .cancel) {
+                UserDefaults.standard.set(true, forKey: "hotkeyInstructionsShown")
+            }
+        } message: {
+            Text("🚀 Press Cmd+Shift+Space from anywhere to open Searchfast!\n\nFor global access, please grant Accessibility permissions:\n\n1. Click 'Open Settings' below\n2. Find 'Searchfast' in the list\n3. Toggle it ON\n\nThis allows the hotkey to work when other apps are focused.")
         }
     }
 
@@ -211,6 +228,21 @@ struct ContentView: View {
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
             NotificationCenter.default.post(name: NSNotification.Name("FocusSearchField"), object: nil)
         }
+    }
+    
+    private func checkAndShowHotkeyInstructions() {
+        let hasShownInstructions = UserDefaults.standard.bool(forKey: "hotkeyInstructionsShown")
+        if !hasShownInstructions {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
+                showingHotkeyInstructions = true
+            }
+        }
+    }
+    
+    private func openAccessibilitySettings() {
+        let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility")!
+        NSWorkspace.shared.open(url)
+        UserDefaults.standard.set(true, forKey: "hotkeyInstructionsShown")
     }
 }
 
