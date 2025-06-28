@@ -135,6 +135,7 @@ struct SearchBar: View {
     @FocusState private var isFieldFocused: Bool
     @Environment(\.colorScheme) private var colorScheme
     @State private var isDragOver = false
+    @State private var showingImagePicker = false
     
     var body: some View {
         if #available(macOS 26.0, *) {
@@ -152,6 +153,17 @@ struct SearchBar: View {
                 .focused($isFieldFocused)
                 
                 Spacer()
+                
+                // Attach icon for image selection
+                Button(action: {
+                    showingImagePicker = true
+                }) {
+                    Image(systemName: "paperclip")
+                        .foregroundColor(Color(NSColor.tertiaryLabelColor))
+                        .font(.system(size: 14, weight: .medium))
+                }
+                .buttonStyle(.plain)
+                .help("Attach image")
                 
                 if !text.isEmpty {
                     Button(action: {
@@ -183,6 +195,13 @@ struct SearchBar: View {
             }
             .onReceive(NotificationCenter.default.publisher(for: Notification.Name("FocusSearchField"))) { _ in
                 isFieldFocused = true
+            }
+            .fileImporter(
+                isPresented: $showingImagePicker,
+                allowedContentTypes: [.image],
+                allowsMultipleSelection: false
+            ) { result in
+                handleFileSelection(result: result)
             }
         } else {
             // Fallback on earlier versions
@@ -221,6 +240,33 @@ struct SearchBar: View {
             }
         }
         return false
+    }
+    
+    private func handleFileSelection(result: Result<[URL], Error>) {
+        switch result {
+        case .success(let urls):
+            guard let url = urls.first else { return }
+            
+            // Check if we can access the file
+            guard url.startAccessingSecurityScopedResource() else {
+                print("Failed to access security scoped resource")
+                return
+            }
+            
+            defer {
+                url.stopAccessingSecurityScopedResource()
+            }
+            
+            // Load the image
+            if let image = NSImage(contentsOf: url) {
+                DispatchQueue.main.async {
+                    onImageDrop?(image)
+                }
+            }
+            
+        case .failure(let error):
+            print("File selection failed: \(error.localizedDescription)")
+        }
     }
 }
 
