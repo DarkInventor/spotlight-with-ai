@@ -132,6 +132,7 @@ struct SearchBar: View {
     @Binding var text: String
     var onSubmit: (() -> Void)? = nil
     @FocusState private var isFieldFocused: Bool
+    @Environment(\.colorScheme) private var colorScheme
     
     var body: some View {
         if #available(macOS 26.0, *) {
@@ -167,7 +168,7 @@ struct SearchBar: View {
                 // Use a RoundedRectangle to ensure the glass effect has rounded corners
                 // that match the view's clip shape.
                 RoundedRectangle(cornerRadius: 36)
-                    .fill(Color.clear)
+                    .fill(colorScheme == .light ? Color.white.opacity(0.4) : Color.clear)
                     .glassEffect()
             )
             .clipShape(RoundedRectangle(cornerRadius: 36)) // Clip the view for rounded corners
