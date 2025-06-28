@@ -1,6 +1,7 @@
 import CoreFoundation
 import SwiftUI
 import GoogleGenerativeAI
+import SwiftfulLoadingIndicators
 
 struct ContentView: View {
     @State private var searchText: String = ""
@@ -42,11 +43,7 @@ struct ContentView: View {
                 .clipped()
                 
                 if isLoading {
-                    ProgressView()
-                        .progressViewStyle(CircularProgressViewStyle(tint: .indigo))
-                        .scaleEffect(2)
-                        .transition(.scale.combined(with: .opacity))
-                        .animation(.easeInOut(duration: 0.2), value: isLoading)
+                    LoadingIndicator(animation: .threeBallsTriangle, color: .white, size: .medium, speed: .normal)
                 }
             }
             .frame(maxWidth: .infinity, minHeight: 200, maxHeight: .infinity)
