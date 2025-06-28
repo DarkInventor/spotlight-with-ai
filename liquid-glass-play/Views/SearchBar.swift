@@ -131,8 +131,10 @@ struct FocusableTextField: NSViewRepresentable {
 struct SearchBar: View {
     @Binding var text: String
     var onSubmit: (() -> Void)? = nil
+    var onImageDrop: ((NSImage) -> Void)? = nil
     @FocusState private var isFieldFocused: Bool
     @Environment(\.colorScheme) private var colorScheme
+    @State private var isDragOver = false
     
     var body: some View {
         if #available(macOS 26.0, *) {
@@ -170,14 +172,55 @@ struct SearchBar: View {
                 RoundedRectangle(cornerRadius: 36)
                     .fill(colorScheme == .light ? Color.white.opacity(0.4) : Color.clear)
                     .glassEffect()
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 36)
+                            .stroke(isDragOver ? Color.blue.opacity(0.6) : Color.clear, lineWidth: 2)
+                    )
             )
             .clipShape(RoundedRectangle(cornerRadius: 36)) // Clip the view for rounded corners
+            .onDrop(of: [.image, .fileURL], isTargeted: $isDragOver) { providers in
+                handleDrop(providers: providers)
+            }
             .onReceive(NotificationCenter.default.publisher(for: Notification.Name("FocusSearchField"))) { _ in
                 isFieldFocused = true
             }
         } else {
             // Fallback on earlier versions
         }
+    }
+    
+    private func handleDrop(providers: [NSItemProvider]) -> Bool {
+        for provider in providers {
+            if provider.hasItemConformingToTypeIdentifier("public.image") {
+                provider.loadItem(forTypeIdentifier: "public.image", options: nil) { item, error in
+                    if let data = item as? Data, let image = NSImage(data: data) {
+                        DispatchQueue.main.async {
+                            onImageDrop?(image)
+                        }
+                    } else if let url = item as? URL, let image = NSImage(contentsOf: url) {
+                        DispatchQueue.main.async {
+                            onImageDrop?(image)
+                        }
+                    }
+                }
+                return true
+            } else if provider.hasItemConformingToTypeIdentifier("public.file-url") {
+                provider.loadItem(forTypeIdentifier: "public.file-url", options: nil) { item, error in
+                    if let url = item as? URL {
+                        let supportedTypes = ["png", "jpg", "jpeg", "gif", "bmp", "tiff", "webp"]
+                        if supportedTypes.contains(url.pathExtension.lowercased()) {
+                            if let image = NSImage(contentsOf: url) {
+                                DispatchQueue.main.async {
+                                    onImageDrop?(image)
+                                }
+                            }
+                        }
+                    }
+                }
+                return true
+            }
+        }
+        return false
     }
 }
 
