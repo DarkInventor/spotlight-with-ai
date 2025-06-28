@@ -51,7 +51,7 @@ struct ContentView: View {
                             } else {
                                 Image(systemName: selectedImage != nil ? "camera.fill" : "camera")
                                     .font(.system(size: 20, weight: .medium))
-                                    .foregroundColor(selectedImage != nil ? .green : (colorScheme == .light ? .gray.opacity(0.5) : .green.opacity(0.5)))
+                                    .foregroundColor(selectedImage != nil ? .green : (colorScheme == .light ? .black.opacity(0.5) : .green.opacity(0.5)))
                                     .padding()
                                     .glassEffect()
                                     .onHover { isHovered in
@@ -451,20 +451,13 @@ struct ContentView: View {
     // MARK: - Universal Search Methods
     
     private func handleSearch() {
-        // Check if we should ask for universal search permission first
-        if universalSearchManager.shouldAskPermission() {
-            universalSearchManager.requestPermission()
-            return
-        }
+        print("🚀 ENTER PRESSED - DIRECT AI CHAT! Saving cats & dogs!")
         
-        // If we have universal search enabled, try that first
-        if universalSearchManager.hasPermission && !searchText.isEmpty {
-            universalSearchManager.search(query: searchText)
-            showingUniversalResults = true
-            return
-        }
+        // Clear any universal search results when user explicitly presses Enter
+        showingUniversalResults = false
+        universalSearchManager.searchResults = []
         
-        // Otherwise, proceed with AI response
+        // DIRECTLY go to AI chat when Enter is pressed - this is what users expect!
         generateResponse()
     }
     
