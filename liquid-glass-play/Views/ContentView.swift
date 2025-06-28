@@ -11,7 +11,9 @@ struct ContentView: View {
     @State private var isCopied = false
     @State private var selectedImage: NSImage? = nil
     @StateObject private var memoryManager = MemoryManager()
+    @StateObject private var universalSearchManager = UniversalSearchManager()
     @State private var showingHotkeyInstructions = false
+    @State private var showingUniversalResults = false
     @Environment(\.colorScheme) private var colorScheme
     // Before running, please ensure you have added the GoogleGenerativeAI package.
     // In Xcode: File > Add Package Dependencies... > https://github.com/google/generative-ai-swift
@@ -20,9 +22,12 @@ struct ContentView: View {
     var body: some View {
         VStack(spacing: 16) {
             VStack(spacing: 8) {
-                SearchBar(text: $searchText, onSubmit: generateResponse, onImageDrop: handleImageDrop)
+                SearchBar(text: $searchText, onSubmit: handleSearch, onImageDrop: handleImageDrop)
                     .frame(maxWidth: .infinity)
                     .padding(.horizontal, 20)
+                    .onChange(of: searchText) { newValue in
+                        handleUniversalSearchTextChange(newValue)
+                    }
                 
                 if let selectedImage = selectedImage {
                     HStack {
@@ -64,7 +69,43 @@ struct ContentView: View {
 
             ZStack {
                 ScrollView {
-                    VStack {
+                    VStack(spacing: 16) {
+                        // Universal search results (shown above AI response when searching)
+                        if showingUniversalResults {
+                            VStack {
+                                if !universalSearchManager.searchResults.isEmpty {
+                                    UniversalSearchResultsView(
+                                        categoryResults: universalSearchManager.searchResults,
+                                        onResultSelected: handleUniversalResultSelection
+                                    )
+                                    .background(Color.clear)
+                                    .glassEffect(in: .rect(cornerRadius: 16.0))
+                                    .animation(.easeInOut(duration: 0.3), value: universalSearchManager.searchResults.count)
+                                    
+                                    if !searchText.isEmpty {
+                                        Button(action: {
+                                            // Continue with AI search instead
+                                            generateResponse()
+                                        }) {
+                                            HStack {
+                                                Image(systemName: "brain")
+                                                    .font(.system(size: 12))
+                                                Text("Ask AI instead: \"\(searchText)\"")
+                                                    .font(.system(size: 14))
+                                            }
+                                            .foregroundColor(.blue)
+                                            .padding(.horizontal, 16)
+                                            .padding(.vertical, 8)
+                                            .background(Color.blue.opacity(0.1))
+                                            .cornerRadius(20)
+                                        }
+                                        .buttonStyle(.plain)
+                                    }
+                                }
+                            }
+                        }
+                        
+                        // AI Response area
                         ZStack(alignment: .topTrailing) {
                             Text(response)
                                 .font(.system(size: 16, weight: .regular))
@@ -119,6 +160,18 @@ struct ContentView: View {
             }
         } message: {
             Text("Would you like to save your conversation history to a local file for better context? This helps the AI remember your previous questions. The file will be saved in your Documents folder.")
+        }
+        .alert("Enable Universal Search?", isPresented: $universalSearchManager.showingPermissionAlert) {
+            Button("Allow") {
+                universalSearchManager.grantPermission()
+                UserDefaults.standard.set(true, forKey: "universalSearchPermissionAsked")
+            }
+            Button("No Thanks", role: .cancel) {
+                universalSearchManager.denyPermission()
+                UserDefaults.standard.set(true, forKey: "universalSearchPermissionAsked")
+            }
+        } message: {
+            Text("Would you like to enable universal search? This allows Searchfast to find files, documents, applications, and everything on your Mac - just like Raycast! Search for anything, anywhere.")
         }
         .alert("Global Hotkey Setup", isPresented: $showingHotkeyInstructions) {
             Button("Open Settings") {
@@ -243,6 +296,62 @@ struct ContentView: View {
         let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility")!
         NSWorkspace.shared.open(url)
         UserDefaults.standard.set(true, forKey: "hotkeyInstructionsShown")
+    }
+    
+    // MARK: - Universal Search Methods
+    
+    private func handleSearch() {
+        // Check if we should ask for universal search permission first
+        if universalSearchManager.shouldAskPermission() {
+            universalSearchManager.requestPermission()
+            return
+        }
+        
+        // If we have universal search enabled, try that first
+        if universalSearchManager.hasPermission && !searchText.isEmpty {
+            universalSearchManager.search(query: searchText)
+            showingUniversalResults = true
+            return
+        }
+        
+        // Otherwise, proceed with AI response
+        generateResponse()
+    }
+    
+    private func handleUniversalSearchTextChange(_ newValue: String) {
+        print("🔍 Universal search text changed to: '\(newValue)'")
+        
+        // Real-time universal search as user types
+        if universalSearchManager.hasPermission && !newValue.isEmpty {
+            // Use DispatchQueue for debouncing instead of NSObject perform
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                // Only search if the text hasn't changed
+                if newValue == self.searchText && !self.searchText.isEmpty {
+                    self.universalSearchManager.search(query: self.searchText)
+                }
+            }
+            showingUniversalResults = true
+        } else {
+            showingUniversalResults = false
+            universalSearchManager.searchResults = []
+        }
+    }
+    
+    private func handleUniversalResultSelection(_ result: UniversalSearchResult) {
+        // Open the selected file/app
+        universalSearchManager.openFile(result)
+        
+        // Clear search and hide window
+        searchText = ""
+        showingUniversalResults = false
+        universalSearchManager.searchResults = []
+        
+        // Hide the window after opening file
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+            if let windowManager = NSApp.delegate as? WindowManager {
+                windowManager.hideWindow()
+            }
+        }
     }
 }
 
