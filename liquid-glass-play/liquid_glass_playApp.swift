@@ -187,6 +187,17 @@ class WindowManager: NSObject, ObservableObject, NSWindowDelegate {
     func forceShowWindow() {
         guard let window = window else { return }
         
+        // CAPTURE CONTEXT BEFORE ANYTHING ELSE!
+        // Get the currently frontmost app BEFORE we steal focus
+        let currentApp = NSWorkspace.shared.frontmostApplication
+        print("🎯 CAPTURING CONTEXT FOR: \(currentApp?.localizedName ?? "Unknown")")
+        
+        // Post notification with the current app info IMMEDIATELY
+        NotificationCenter.default.post(
+            name: NSNotification.Name("CaptureContextBeforeShow"), 
+            object: currentApp
+        )
+        
         isVisible = true
         justOpened = true
         
@@ -249,7 +260,7 @@ class WindowManager: NSObject, ObservableObject, NSWindowDelegate {
             guard let self = self else { return }
             
             // Find the main window
-            guard var window = NSApplication.shared.windows.first(where: { 
+            guard var window = NSApplication.shared.windows.first(where: {
                 !$0.className.contains("StatusBar") && $0.contentView != nil
             }) else {
                 return
@@ -261,9 +272,9 @@ class WindowManager: NSObject, ObservableObject, NSWindowDelegate {
                 self.window = spotlightWindow
             } else {
                 // Convert to our custom window class that can become key
-                let spotlightWindow = SpotlightWindow(contentRect: window.frame, 
-                                                    styleMask: [.borderless, .fullSizeContentView], 
-                                                    backing: .buffered, 
+                let spotlightWindow = SpotlightWindow(contentRect: window.frame,
+                                                    styleMask: [.borderless, .fullSizeContentView],
+                                                    backing: .buffered,
                                                     defer: false)
                 spotlightWindow.contentView = window.contentView
                 
@@ -349,6 +360,9 @@ class WindowManager: NSObject, ObservableObject, NSWindowDelegate {
         
         // Clear search when hiding
         NotificationCenter.default.post(name: NSNotification.Name("ClearSearch"), object: nil)
+        
+        // Clear the locked context when hiding
+        NotificationCenter.default.post(name: NSNotification.Name("ClearLockedContext"), object: nil)
     }
     
     func updateWindowHeight(_ height: CGFloat) {
@@ -425,6 +439,16 @@ class WindowManager: NSObject, ObservableObject, NSWindowDelegate {
     private func setupGlobalMonitoring() {
         NSEvent.addGlobalMonitorForEvents(matching: [.keyDown]) { [weak self] event in
             if event.modifierFlags.contains([.command, .shift]) && event.keyCode == 49 { // Cmd+Shift+Space
+                // CAPTURE CONTEXT IMMEDIATELY when hotkey is pressed, before window shows
+                let currentApp = NSWorkspace.shared.frontmostApplication
+                print("🔥 HOTKEY PRESSED! Current frontmost app: \(currentApp?.localizedName ?? "Unknown")")
+                
+                // Store the context immediately
+                NotificationCenter.default.post(
+                    name: NSNotification.Name("CaptureContextBeforeShow"), 
+                    object: currentApp
+                )
+                
                 DispatchQueue.main.async {
                     self?.toggleWindow()
                 }
@@ -441,6 +465,16 @@ class WindowManager: NSObject, ObservableObject, NSWindowDelegate {
     private func setupLocalHotkey() {
         NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
             if event.modifierFlags.contains([.command, .shift]) && event.keyCode == 49 { // Cmd+Shift+Space
+                // CAPTURE CONTEXT IMMEDIATELY when hotkey is pressed, before window shows
+                let currentApp = NSWorkspace.shared.frontmostApplication
+                print("🔥 LOCAL HOTKEY PRESSED! Current frontmost app: \(currentApp?.localizedName ?? "Unknown")")
+                
+                // Store the context immediately
+                NotificationCenter.default.post(
+                    name: NSNotification.Name("CaptureContextBeforeShow"), 
+                    object: currentApp
+                )
+                
                 DispatchQueue.main.async {
                     self?.toggleWindow()
                 }
@@ -587,3 +621,4 @@ struct WindowCommands: View {
     }
 }
 #endif
+

@@ -75,7 +75,7 @@ class AppSearchManager: ObservableObject {
         let searchPaths = [
             // Standard system locations
             "/Applications",
-            "/System/Applications", 
+            "/System/Applications",
             "/System/Library/CoreServices",
             "/Library/Application Support",
             "/System/Library/PreferencePanes",
@@ -83,7 +83,7 @@ class AppSearchManager: ObservableObject {
             // User locations
             NSHomeDirectory() + "/Applications",
             NSHomeDirectory() + "/Downloads",
-            NSHomeDirectory() + "/Documents", 
+            NSHomeDirectory() + "/Documents",
             NSHomeDirectory() + "/Desktop",
             NSHomeDirectory() + "/Library/Application Support",
             
@@ -217,7 +217,7 @@ class AppSearchManager: ObservableObject {
                 let resourceValues = try url.resourceValues(forKeys: [.isDirectoryKey, .isHiddenKey])
                 
                 // Skip hidden files and system directories that might cause issues
-                if resourceValues.isHidden == true || 
+                if resourceValues.isHidden == true ||
                    url.lastPathComponent.hasPrefix(".") ||
                    url.lastPathComponent == "System" ||
                    url.lastPathComponent == "private" {
@@ -228,7 +228,7 @@ class AppSearchManager: ObservableObject {
                     if let appInfo = createAppInfo(from: url) {
                         apps.append(appInfo)
                     }
-                } else if resourceValues.isDirectory == true && 
+                } else if resourceValues.isDirectory == true &&
                          url.path.components(separatedBy: "/").count < 8 { // Limit recursion depth
                     await searchDirectoryRecursively(path: url.path, apps: &apps)
                 } else {

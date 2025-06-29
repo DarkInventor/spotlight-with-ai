@@ -122,7 +122,7 @@ class UniversalSearchManager: ObservableObject {
         
         let fastSearchPaths = [
             "/Applications",
-            "/System/Applications", 
+            "/System/Applications",
             "/System/Applications/Utilities",
             NSHomeDirectory() + "/Applications"
         ]
@@ -246,7 +246,7 @@ class UniversalSearchManager: ObservableObject {
             // Fallback to direct search if cache not ready
             let fastSearchPaths = [
                 "/Applications",
-                "/System/Applications", 
+                "/System/Applications",
                 "/System/Applications/Utilities",
                 NSHomeDirectory() + "/Applications"
             ]
@@ -321,7 +321,7 @@ class UniversalSearchManager: ObservableObject {
             category: .applications,
             icon: icon,
             size: nil, // Skip size calculation for MAXIMUM SPEED
-            modifiedDate: nil, // Skip date for MAXIMUM SPEED  
+            modifiedDate: nil, // Skip date for MAXIMUM SPEED
             type: "Application",
             bundleIdentifier: nil, // Skip bundle info for MAXIMUM SPEED
             relevanceScore: nameScore
@@ -550,7 +550,7 @@ class UniversalSearchManager: ObservableObject {
         }
         
         // System files
-        if url.path.hasPrefix("/System/") || 
+        if url.path.hasPrefix("/System/") ||
            url.path.hasPrefix("/usr/") ||
            url.path.hasPrefix("/Library/") ||
            pathExtension == "kext" ||

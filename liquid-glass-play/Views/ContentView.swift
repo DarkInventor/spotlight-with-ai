@@ -14,9 +14,12 @@ struct ContentView: View {
     @State private var selectedImage: NSImage? = nil
     @StateObject private var memoryManager = MemoryManager()
     @StateObject private var universalSearchManager = UniversalSearchManager()
+    @StateObject private var contextManager = ContextManager()
+    @StateObject private var automationManager = AppAutomationManager()
     @State private var showingHotkeyInstructions = false
     @State private var showingUniversalResults = false
     @State private var isCapturingScreenshot = false
+    @State private var shouldWriteToApp = false
     @Environment(\.colorScheme) private var colorScheme
     // Before running, please ensure you have added the GoogleGenerativeAI package.
     // In Xcode: File > Add Package Dependencies... > https://github.com/google/generative-ai-swift
@@ -109,6 +112,62 @@ struct ContentView: View {
             ZStack {
                 ScrollView {
                     VStack(spacing: 16) {
+                        // Debug: Show current context and automation capabilities
+                        if let context = contextManager.currentContext {
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("📍 Context: \(context.detectedActivity)")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                                Text("🖥️ App: \(context.appName)")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                                if !context.windowTitle.isEmpty && context.windowTitle != "Unknown" {
+                                    Text("🪟 Window: \(context.windowTitle)")
+                                        .font(.caption)
+                                        .foregroundColor(.secondary)
+                                }
+                                
+                                // Show automation capability
+                                HStack {
+                                    if automationManager.canAutomateApp(context.appName) {
+                                        Image(systemName: "checkmark.circle.fill")
+                                            .foregroundColor(.green)
+                                            .font(.caption)
+                                        Text("Automation supported")
+                                            .font(.caption)
+                                            .foregroundColor(.green)
+                                    } else {
+                                        Image(systemName: "exclamationmark.circle.fill")
+                                            .foregroundColor(.orange)
+                                            .font(.caption)
+                                        Text("Basic automation only")
+                                            .font(.caption)
+                                            .foregroundColor(.orange)
+                                    }
+                                }
+                                
+                                HStack {
+                                    Button("🔄 Refresh Context") {
+                                        Task {
+                                            await contextManager.captureCurrentContext()
+                                        }
+                                    }
+                                    .font(.caption)
+                                    .buttonStyle(.borderless)
+                                    
+                                    Button("🤖 Show Supported Apps") {
+                                        let apps = automationManager.getSupportedApps().joined(separator: ", ")
+                                        print("🤖 Supported Apps: \(apps)")
+                                    }
+                                    .font(.caption)
+                                    .buttonStyle(.borderless)
+                                }
+                            }
+                            .padding(8)
+                            .background(Color.secondary.opacity(0.1))
+                            .cornerRadius(8)
+                        }
+                        
                         // Universal search results (shown above AI response when searching)
                         if showingUniversalResults {
                             VStack {
@@ -145,29 +204,83 @@ struct ContentView: View {
                         }
                         
                         // AI Response area
-                        ZStack(alignment: .topTrailing) {
-                            Text(response)
-                                .font(.system(size: 16, weight: .regular))
-                                .lineLimit(nil)
-                                .multilineTextAlignment(.leading)
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                                .fixedSize(horizontal: false, vertical: true)
-                                .textSelection(.enabled)
-                                .padding()
-                                .background(Color.clear)
-                                .glassEffect(in: .rect(cornerRadius: 16.0))
-                                .animation(.easeInOut(duration: 0.3), value: response)
-                            
-                            Button(action: copyResponse) {
-                                Image(systemName: isCopied ? "checkmark" : "doc.on.doc")
-                                    .foregroundColor(isCopied ? .green : (colorScheme == .light ? Color.black.opacity(0.7) : Color.white.opacity(0.6)))
-                                    .font(.system(size: 12, weight: .medium))
-                                    .padding(4)
+                        VStack(spacing: 12) {
+                            ZStack(alignment: .topTrailing) {
+                                Text(response)
+                                    .font(.system(size: 16, weight: .regular))
+                                    .lineLimit(nil)
+                                    .multilineTextAlignment(.leading)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                    .fixedSize(horizontal: false, vertical: true)
+                                    .textSelection(.enabled)
+                                    .padding()
+                                    .background(Color.clear)
+                                    .glassEffect(in: .rect(cornerRadius: 16.0))
+                                    .animation(.easeInOut(duration: 0.3), value: response)
+                                
+                                Button(action: copyResponse) {
+                                    Image(systemName: isCopied ? "checkmark" : "doc.on.doc")
+                                        .foregroundColor(isCopied ? .green : (colorScheme == .light ? Color.black.opacity(0.7) : Color.white.opacity(0.6)))
+                                        .font(.system(size: 12, weight: .medium))
+                                        .padding(4)
+                                }
+                                .buttonStyle(PlainButtonStyle())
+                                .opacity(responseText == "How can I help you today?" ? 0 : 1)
+                                .padding(.top, 8)
+                                .padding(.trailing, 8)
                             }
-                            .buttonStyle(PlainButtonStyle())
-                            .opacity(responseText == "How can I help you today?" ? 0 : 1)
-                            .padding(.top, 8)
-                            .padding(.trailing, 8)
+                            
+                            // Smart "Write to App" button with automation capabilities
+                            if shouldWriteToApp, let context = contextManager.currentContext {
+                                VStack(spacing: 8) {
+                                    Button(action: writeToCurrentApp) {
+                                        HStack {
+                                            if automationManager.isAutomating {
+                                                ProgressView()
+                                                    .scaleEffect(0.8)
+                                                    .foregroundColor(.white)
+                                            } else {
+                                                Image(systemName: getAutomationIcon(for: context.appName))
+                                                    .font(.system(size: 14))
+                                            }
+                                            
+                                            Text(automationManager.isAutomating ? "Writing..." : "Write to \(context.appName)")
+                                                .font(.system(size: 14, weight: .medium))
+                                        }
+                                        .foregroundColor(.white)
+                                        .padding(.horizontal, 20)
+                                        .padding(.vertical, 10)
+                                        .background(
+                                            LinearGradient(
+                                                gradient: Gradient(colors: getAutomationColors(for: context.appName)),
+                                                startPoint: .leading,
+                                                endPoint: .trailing
+                                            )
+                                        )
+                                        .cornerRadius(20)
+                                        .shadow(color: .blue.opacity(0.3), radius: 8, x: 0, y: 4)
+                                    }
+                                    .buttonStyle(.plain)
+                                    .disabled(automationManager.isAutomating)
+                                    
+                                    // Show automation strategy
+                                    if let capabilities = automationManager.getAutomationCapabilities(for: context.appName) {
+                                        Text("Strategy: \(getStrategyDescription(capabilities.automationStrategy))")
+                                            .font(.caption2)
+                                            .foregroundColor(.secondary)
+                                    }
+                                    
+                                    // Show last automation result if available
+                                    if !automationManager.lastAutomationResult.isEmpty {
+                                        Text(automationManager.lastAutomationResult)
+                                            .font(.caption2)
+                                            .foregroundColor(automationManager.lastAutomationResult.contains("Success") ? .green : .orange)
+                                            .multilineTextAlignment(.center)
+                                    }
+                                }
+                                .transition(.scale.combined(with: .opacity))
+                                .animation(.spring(response: 0.4, dampingFraction: 0.8), value: shouldWriteToApp)
+                            }
                         }
                         
                         Spacer(minLength: 0)
@@ -186,6 +299,27 @@ struct ContentView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("ShowHotkeyInstructions"))) { _ in
             showingHotkeyInstructions = true
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("CaptureContext"))) { _ in
+            Task {
+                // Small delay to ensure the previous app is still frontmost
+                try? await Task.sleep(nanoseconds: 100_000_000) // 0.1 seconds
+                await contextManager.captureCurrentContext()
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("CaptureContextBeforeShow"))) { notification in
+            Task {
+                // Capture context for the specific app that was frontmost
+                if let app = notification.object as? NSRunningApplication {
+                    print("🎯 ContentView: Received context capture notification for \(app.localizedName ?? "Unknown")")
+                    await contextManager.captureContextForApp(app)
+                    
+                    // Force UI update
+                    await MainActor.run {
+                        print("🔄 Current context after capture: \(contextManager.currentContext?.appName ?? "None")")
+                    }
+                }
+            }
         }
         .onAppear {
             checkAndShowHotkeyInstructions()
@@ -344,20 +478,33 @@ struct ContentView: View {
             return
         }
         
+        let userInput = searchText
+        
+        // Check if this is an app launch/automation request
+        if isAppLaunchRequest(userInput) {
+            handleAppLaunchRequest(userInput)
+            return
+        }
+        
         isLoading = true
         response = ""
         responseText = ""
         
-        let userInput = searchText
         let hasImage = selectedImage != nil
 
         Task {
+            // Capture current context before generating response
+            await contextManager.captureCurrentContext()
+            
             do {
                 let result: GenerateContentResponse
                 
                 // Load recent memory for context
                 let memoryContext = memoryManager.loadRecentMemory(limit: 5)
-                let contextualPrompt = memoryContext.isEmpty ? userInput : "\(memoryContext)\n\nCurrent question: \(userInput)"
+                
+                // Get contextual prompt that includes what user is currently doing
+                let contextualPrompt = contextManager.getContextualPrompt(for: userInput)
+                let fullPrompt = memoryContext.isEmpty ? contextualPrompt : "\(memoryContext)\n\n\(contextualPrompt)"
                 
                 if let image = selectedImage {
                     // Convert NSImage to Data
@@ -367,19 +514,22 @@ struct ContentView: View {
                         throw NSError(domain: "ImageConversion", code: 1, userInfo: [NSLocalizedDescriptionKey: "Failed to convert image"])
                     }
                     
-                    let prompt = userInput.isEmpty ? "What do you see in this image?" : contextualPrompt
+                    let prompt = userInput.isEmpty ? "What do you see in this image?" : fullPrompt
                     let imagePart = ModelContent.Part.data(mimetype: "image/jpeg", jpegData)
                     result = try await model.generateContent(prompt, imagePart)
                     withAnimation {
                         self.selectedImage = nil // Clear image after sending
                     }
                 } else {
-                    result = try await model.generateContent(contextualPrompt)
+                    result = try await model.generateContent(fullPrompt)
                 }
                 
                 let resultText = result.text ?? "No response found"
                 response = LocalizedStringKey(resultText)
                 responseText = resultText
+                
+                // Check if this looks like a writing request and we can write to current app
+                shouldWriteToApp = isWritingRequest(userInput) && (contextManager.currentContext?.canWriteIntoApp ?? false)
                 
                 // Save conversation to memory
                 memoryManager.saveConversation(
@@ -494,6 +644,433 @@ struct ContentView: View {
             if let windowManager = NSApp.delegate as? WindowManager {
                 windowManager.hideWindow()
             }
+        }
+    }
+    
+    // MARK: - Smart Writing Detection
+    
+    private func isWritingRequest(_ userInput: String) -> Bool {
+        let writingKeywords = [
+            "write", "help me write", "compose", "draft", "create",
+            "generate text", "continue writing", "expand on",
+            "rewrite", "improve", "summarize", "explain",
+            "respond to", "reply", "email", "letter", "document",
+            "paragraph", "essay", "article", "blog", "content",
+            "type", "insert", "add text", "fill in", "complete"
+        ]
+        
+        let inputLower = userInput.lowercased()
+        let isWritingKeyword = writingKeywords.contains { inputLower.contains($0) }
+        
+        // Always show write button if we have a valid context (unless app is Searchfast)
+        let hasValidContext = contextManager.currentContext?.appName != "Searchfast" && 
+                             contextManager.currentContext?.canWriteIntoApp == true
+        
+        print("🔍 Writing request check: '\(userInput)'")
+        print("   - Has writing keyword: \(isWritingKeyword)")
+        print("   - Has valid context: \(hasValidContext)")
+        print("   - Current app: \(contextManager.currentContext?.appName ?? "None")")
+        print("   - Can write: \(contextManager.currentContext?.canWriteIntoApp ?? false)")
+        
+        return isWritingKeyword || hasValidContext
+    }
+    
+    private func writeToCurrentApp() {
+        Task {
+            await contextManager.writeIntoCurrentApp(responseText)
+            shouldWriteToApp = false
+            
+            // Hide window after writing
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                if let windowManager = NSApp.delegate as? WindowManager {
+                    windowManager.hideWindow()
+                }
+            }
+        }
+    }
+    
+    // MARK: - App Launch Detection & Handling
+    
+    private func isAppLaunchRequest(_ userInput: String) -> Bool {
+        let inputLower = userInput.lowercased()
+        let launchKeywords = ["open", "launch", "start", "run"]
+        let appKeywords = ["safari", "chrome", "firefox", "word", "excel", "powerpoint", "pages", "numbers", "keynote", "xcode", "vs code", "visual studio", "slack", "discord", "spotify", "finder", "mail", "messages", "facetime", "zoom", "teams"]
+        
+        let hasLaunchKeyword = launchKeywords.contains { inputLower.contains($0) }
+        let hasAppKeyword = appKeywords.contains { inputLower.contains($0) }
+        
+        return hasLaunchKeyword && hasAppKeyword
+    }
+    
+    private func handleAppLaunchRequest(_ userInput: String) {
+        let inputLower = userInput.lowercased()
+        
+        // Extract app name and any additional actions
+        var appToLaunch: String?
+        var additionalAction: String?
+        
+        // App mapping with bundle IDs
+        let appMappings: [String: (name: String, bundleId: String)] = [
+            "safari": ("Safari", "com.apple.Safari"),
+            "chrome": ("Google Chrome", "com.google.Chrome"),
+            "firefox": ("Firefox", "org.mozilla.firefox"),
+            "word": ("Microsoft Word", "com.microsoft.Word"),
+            "excel": ("Microsoft Excel", "com.microsoft.Excel"),
+            "powerpoint": ("Microsoft PowerPoint", "com.microsoft.PowerPoint"),
+            "pages": ("Pages", "com.apple.iWork.Pages"),
+            "numbers": ("Numbers", "com.apple.iWork.Numbers"),
+            "keynote": ("Keynote", "com.apple.iWork.Keynote"),
+            "xcode": ("Xcode", "com.apple.dt.Xcode"),
+            "vs code": ("Visual Studio Code", "com.microsoft.VSCode"),
+            "visual studio": ("Visual Studio Code", "com.microsoft.VSCode"),
+            "slack": ("Slack", "com.tinyspeck.slackmacgap"),
+            "discord": ("Discord", "com.hnc.Discord"),
+            "spotify": ("Spotify", "com.spotify.client"),
+            "finder": ("Finder", "com.apple.finder"),
+            "mail": ("Mail", "com.apple.mail"),
+            "messages": ("Messages", "com.apple.MobileSMS"),
+            "facetime": ("FaceTime", "com.apple.FaceTime"),
+            "zoom": ("zoom.us", "us.zoom.xos"),
+            "teams": ("Microsoft Teams", "com.microsoft.teams")
+        ]
+        
+        // Find which app to launch
+        for (keyword, app) in appMappings {
+            if inputLower.contains(keyword) {
+                appToLaunch = app.name
+                break
+            }
+        }
+        
+        // Check for additional actions (like "search yahoo")
+        if inputLower.contains("search") {
+            if inputLower.contains("yahoo") {
+                additionalAction = "https://www.yahoo.com"
+            } else if inputLower.contains("google") {
+                additionalAction = "https://www.google.com"
+            } else if inputLower.contains("bing") {
+                additionalAction = "https://www.bing.com"
+            } else if inputLower.contains("duckduckgo") || inputLower.contains("duck duck go") {
+                additionalAction = "https://duckduckgo.com"
+            } else {
+                // Extract search term if no specific search engine mentioned
+                let words = inputLower.components(separatedBy: .whitespaces)
+                if let searchIndex = words.firstIndex(of: "search"), searchIndex + 1 < words.count {
+                    let searchTerms = words[(searchIndex + 1)...].joined(separator: "+")
+                    // Default to Google if no search engine specified
+                    additionalAction = "https://www.google.com/search?q=\(searchTerms)"
+                }
+            }
+        }
+        
+        // Check for direct URL navigation
+        if inputLower.contains("go to") || inputLower.contains("visit") || inputLower.contains("open") {
+            if inputLower.contains("youtube") {
+                additionalAction = "https://www.youtube.com"
+            } else if inputLower.contains("github") {
+                additionalAction = "https://github.com"
+            } else if inputLower.contains("stackoverflow") || inputLower.contains("stack overflow") {
+                additionalAction = "https://stackoverflow.com"
+            } else if inputLower.contains("reddit") {
+                additionalAction = "https://www.reddit.com"
+            } else if inputLower.contains("twitter") {
+                additionalAction = "https://twitter.com"
+            } else if inputLower.contains("facebook") {
+                additionalAction = "https://www.facebook.com"
+            } else if inputLower.contains("instagram") {
+                additionalAction = "https://www.instagram.com"
+            } else if inputLower.contains("linkedin") {
+                additionalAction = "https://www.linkedin.com"
+            }
+        }
+        
+        executeAppLaunch(appName: appToLaunch, action: additionalAction, originalRequest: userInput)
+    }
+    
+    private func executeAppLaunch(appName: String?, action: String?, originalRequest: String) {
+        Task {
+            isLoading = true
+            
+            do {
+                if let appName = appName {
+                    // Launch the app
+                    if let appURL = NSWorkspace.shared.urlForApplication(withBundleIdentifier: getBundleId(for: appName)) ??
+                                   findAppByName(appName) {
+                        
+                        let config = NSWorkspace.OpenConfiguration()
+                        config.activates = true
+                        
+                        try await NSWorkspace.shared.openApplication(at: appURL, configuration: config)
+                        
+                        // Wait for app to launch
+                        try await Task.sleep(nanoseconds: 2_000_000_000) // 2 seconds
+                        
+                        // If there's an additional action (like opening a URL), open it in the specific app
+                        if let action = action, let url = URL(string: action) {
+                            await openURLInSpecificApp(url: url, appName: appName)
+                        }
+                        
+                        // Show success message
+                        let actionDescription = action != nil ? " and navigated to \(action!)" : ""
+                        response = LocalizedStringKey("✅ Launched \(appName)\(actionDescription)")
+                        responseText = "✅ Launched \(appName)\(actionDescription)"
+                        
+                    } else {
+                        response = LocalizedStringKey("❌ Could not find \(appName). Please make sure it's installed.")
+                        responseText = "❌ Could not find \(appName). Please make sure it's installed."
+                    }
+                } else {
+                    response = LocalizedStringKey("❌ Could not identify which app to launch from: \(originalRequest)")
+                    responseText = "❌ Could not identify which app to launch from: \(originalRequest)"
+                }
+                
+                // Clear search and hide window
+                searchText = ""
+                DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+                    if let windowManager = NSApp.delegate as? WindowManager {
+                        windowManager.hideWindow()
+                    }
+                }
+                
+            } catch {
+                response = LocalizedStringKey("❌ Failed to launch app: \(error.localizedDescription)")
+                responseText = "❌ Failed to launch app: \(error.localizedDescription)"
+            }
+            
+            isLoading = false
+        }
+    }
+    
+    private func getBundleId(for appName: String) -> String {
+        let bundleIds: [String: String] = [
+            "Safari": "com.apple.Safari",
+            "Google Chrome": "com.google.Chrome",
+            "Firefox": "org.mozilla.firefox",
+            "Microsoft Word": "com.microsoft.Word",
+            "Microsoft Excel": "com.microsoft.Excel",
+            "Microsoft PowerPoint": "com.microsoft.PowerPoint",
+            "Pages": "com.apple.iWork.Pages",
+            "Numbers": "com.apple.iWork.Numbers",
+            "Keynote": "com.apple.iWork.Keynote",
+            "Xcode": "com.apple.dt.Xcode",
+            "Visual Studio Code": "com.microsoft.VSCode",
+            "Slack": "com.tinyspeck.slackmacgap",
+            "Discord": "com.hnc.Discord",
+            "Spotify": "com.spotify.client",
+            "Finder": "com.apple.finder",
+            "Mail": "com.apple.mail",
+            "Messages": "com.apple.MobileSMS",
+            "FaceTime": "com.apple.FaceTime",
+            "zoom.us": "us.zoom.xos",
+            "Microsoft Teams": "com.microsoft.teams"
+        ]
+        
+        return bundleIds[appName] ?? ""
+    }
+    
+    private func findAppByName(_ appName: String) -> URL? {
+        let appName = appName.lowercased()
+        let applicationsURL = URL(fileURLWithPath: "/Applications")
+        
+        do {
+            let apps = try FileManager.default.contentsOfDirectory(at: applicationsURL, includingPropertiesForKeys: nil)
+            for app in apps {
+                if app.lastPathComponent.lowercased().contains(appName) {
+                    return app
+                }
+            }
+        } catch {
+            print("Error searching for app: \(error)")
+        }
+        
+        return nil
+    }
+    
+    private func openURLInSpecificApp(url: URL, appName: String) async {
+        let bundleId = getBundleId(for: appName)
+        
+        // Configure to open URL in specific app
+        let config = NSWorkspace.OpenConfiguration()
+        config.activates = true
+        
+        do {
+            // Try to open URL with specific app bundle ID
+            if !bundleId.isEmpty, 
+               let appURL = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleId) {
+                try await NSWorkspace.shared.open([url], withApplicationAt: appURL, configuration: config)
+            } else {
+                // Fallback: Use AppleScript to ensure URL opens in specific browser
+                await openURLWithAppleScript(url: url.absoluteString, appName: appName)
+            }
+        } catch {
+            print("Failed to open URL in \(appName): \(error)")
+            // Final fallback: try to open URL in the specific app using AppleScript
+            await openURLWithAppleScript(url: url.absoluteString, appName: appName)
+        }
+    }
+    
+    private func openURLWithAppleScript(url: String, appName: String) async {
+        let escapedURL = url.replacingOccurrences(of: "\"", with: "\\\"")
+        let escapedAppName = appName.replacingOccurrences(of: "\"", with: "\\\"")
+        
+        let script: String
+        
+        // Different approaches for different browsers
+        switch appName.lowercased() {
+        case let app where app.contains("safari"):
+            script = """
+            tell application "Safari"
+                activate
+                delay 0.5
+                open location "\(escapedURL)"
+            end tell
+            """
+            
+        case let app where app.contains("chrome"):
+            script = """
+            tell application "Google Chrome"
+                activate
+                delay 0.5
+                open location "\(escapedURL)"
+            end tell
+            """
+            
+        case let app where app.contains("firefox"):
+            script = """
+            tell application "Firefox"
+                activate
+                delay 0.5
+                open location "\(escapedURL)"
+            end tell
+            """
+            
+        default:
+            script = """
+            tell application "\(escapedAppName)"
+                activate
+                delay 0.5
+                open location "\(escapedURL)"
+            end tell
+            """
+        }
+        
+        var error: NSDictionary?
+        if let scriptObject = NSAppleScript(source: script) {
+            scriptObject.executeAndReturnError(&error)
+            if let error = error {
+                print("❌ AppleScript error opening URL: \(error)")
+            } else {
+                print("✅ Successfully opened \(url) in \(appName)")
+            }
+        }
+    }
+    
+    // MARK: - UI Helper Functions
+    
+    private func getAutomationIcon(for appName: String) -> String {
+        let appLower = appName.lowercased()
+        
+        switch appLower {
+        case let app where app.contains("chrome"):
+            return "globe"
+        case let app where app.contains("safari"):
+            return "safari"
+        case let app where app.contains("pages"):
+            return "doc.text"
+        case let app where app.contains("word"):
+            return "doc.richtext"
+        case let app where app.contains("excel"):
+            return "tablecells"
+        case let app where app.contains("powerpoint"):
+            return "presentation"
+        case let app where app.contains("numbers"):
+            return "tablecells.fill"
+        case let app where app.contains("keynote"):
+            return "presentation.fill"
+        case let app where app.contains("xcode"):
+            return "hammer"
+        case let app where app.contains("vs code") || app.contains("visual studio"):
+            return "chevron.left.forwardslash.chevron.right"
+        case let app where app.contains("slack"):
+            return "message.circle"
+        case let app where app.contains("discord"):
+            return "message.badge"
+        case let app where app.contains("mail"):
+            return "envelope"
+        case let app where app.contains("messages"):
+            return "message"
+        case let app where app.contains("notion"):
+            return "doc.plaintext"
+        case let app where app.contains("zoom"):
+            return "video"
+        case let app where app.contains("teams"):
+            return "video.circle"
+        case let app where app.contains("textedit"):
+            return "text.alignleft"
+        case let app where app.contains("notes"):
+            return "note.text"
+        default:
+            return "pencil.and.ellipsis.rectangle"
+        }
+    }
+    
+    private func getAutomationColors(for appName: String) -> [Color] {
+        let appLower = appName.lowercased()
+        
+        switch appLower {
+        case let app where app.contains("chrome"):
+            return [Color.blue, Color.green]
+        case let app where app.contains("safari"):
+            return [Color.blue, Color.cyan]
+        case let app where app.contains("pages"):
+            return [Color.orange, Color.yellow]
+        case let app where app.contains("word"):
+            return [Color.blue, Color.indigo]
+        case let app where app.contains("excel"):
+            return [Color.green, Color.teal]
+        case let app where app.contains("powerpoint"):
+            return [Color.orange, Color.red]
+        case let app where app.contains("numbers"):
+            return [Color.green, Color.mint]
+        case let app where app.contains("keynote"):
+            return [Color.orange, Color.pink]
+        case let app where app.contains("xcode"):
+            return [Color.indigo, Color.purple]
+        case let app where app.contains("vs code") || app.contains("visual studio"):
+            return [Color.blue, Color.purple]
+        case let app where app.contains("slack"):
+            return [Color.purple, Color.pink]
+        case let app where app.contains("discord"):
+            return [Color.indigo, Color.blue]
+        case let app where app.contains("mail"):
+            return [Color.blue, Color.cyan]
+        case let app where app.contains("messages"):
+            return [Color.green, Color.blue]
+        case let app where app.contains("notion"):
+            return [Color.gray, Color.black]
+        case let app where app.contains("zoom"):
+            return [Color.blue, Color.indigo]
+        case let app where app.contains("teams"):
+            return [Color.purple, Color.blue]
+        case let app where app.contains("textedit"):
+            return [Color.gray, Color.blue]
+        case let app where app.contains("notes"):
+            return [Color.yellow, Color.orange]
+        default:
+            return [Color.blue, Color.purple]
+        }
+    }
+    
+    private func getStrategyDescription(_ strategy: AppAutomationManager.AutomationStrategy) -> String {
+        switch strategy {
+        case .appleScript:
+            return "AppleScript"
+        case .accessibility:
+            return "Accessibility API"
+        case .uiTest:
+            return "UI Testing"
+        case .hybrid:
+            return "Hybrid (Smart)"
         }
     }
 }
