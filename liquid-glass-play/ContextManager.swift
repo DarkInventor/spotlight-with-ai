@@ -32,16 +32,31 @@ class ContextManager: ObservableObject {
     deinit {
         Task { @MainActor in
             stopContextMonitoring()
+            // Clean up memory
+            currentContext = nil
+            hotkeyTriggeredContext = nil
         }
     }
     
     // MARK: - Context Monitoring
     
     private func startContextMonitoring() {
-        // Capture context every 10 seconds when app is in background
-        contextTimer = Timer.scheduledTimer(withTimeInterval: 10.0, repeats: true) { _ in
+        // Capture context every 30 seconds when app is in background (reduced from 10s)
+        // Only capture when user switches apps to save resources
+        contextTimer = Timer.scheduledTimer(withTimeInterval: 30.0, repeats: true) { _ in
             Task {
-                await self.captureCurrentContext()
+                await self.captureCurrentContextLightweight()
+            }
+        }
+        
+        // Listen for app switching for real-time context updates
+        NSWorkspace.shared.notificationCenter.addObserver(
+            forName: NSWorkspace.didActivateApplicationNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            Task {
+                await self?.captureCurrentContextLightweight()
             }
         }
     }
@@ -85,6 +100,44 @@ class ContextManager: ObservableObject {
     }
     
     // MARK: - Smart Context Capture
+    
+    // Lightweight version - no screenshots, just app info
+    func captureCurrentContextLightweight() async {
+        guard !isCapturingContext else { return }
+        
+        // If we have a hotkey-triggered context and frontmost app is Searchfast, use the locked context
+        let frontmostApp = NSWorkspace.shared.frontmostApplication?.localizedName ?? "Unknown"
+        if frontmostApp == "Searchfast" || frontmostApp.contains("search"), 
+           let lockedContext = hotkeyTriggeredContext {
+            print("🔒 USING LOCKED CONTEXT: \(lockedContext.appName) (frontmost is \(frontmostApp))")
+            currentContext = lockedContext
+            return
+        }
+        
+        isCapturingContext = true
+        defer { isCapturingContext = false }
+        
+        // Get frontmost app info (fast)
+        let (appName, windowTitle) = getFrontmostAppInfo()
+        
+        // Detect activity without screenshots (much faster)
+        let detectedActivity = detectUserActivity(appName: appName, windowTitle: windowTitle, extractedText: nil)
+        
+        // Check if we can write into this app
+        let canWrite = canWriteIntoApp(appName)
+        
+        currentContext = UserContext(
+            appName: appName,
+            windowTitle: windowTitle,
+            screenshot: nil, // No screenshot for background monitoring
+            extractedText: nil,
+            detectedActivity: detectedActivity,
+            timestamp: Date(),
+            canWriteIntoApp: canWrite
+        )
+        
+        print("⚡ Lightweight context: \(appName) - \(detectedActivity)")
+    }
     
     func captureCurrentContext() async {
         guard !isCapturingContext else { return }
@@ -131,6 +184,12 @@ class ContextManager: ObservableObject {
             )
             
             print("📝 Context captured: \(appName) - \(detectedActivity)")
+            
+            // Schedule memory cleanup of old screenshots
+            Task {
+                try? await Task.sleep(nanoseconds: 30_000_000_000) // 30 seconds
+                await self.cleanupOldScreenshots()
+            }
             
         } catch {
             print("❌ Context capture failed: \(error)")
@@ -267,12 +326,13 @@ class ContextManager: ObservableObject {
             throw ContextError.noDisplayFound
         }
         
-        // Create configuration for screenshot (smaller for performance)
+        // Create configuration for screenshot (much smaller for speed and memory)
         let config = SCStreamConfiguration()
-        config.width = 1920 // Smaller than full resolution for speed
-        config.height = 1080
+        config.width = 800 // Much smaller for speed (was 1920)
+        config.height = 600  // Much smaller for speed (was 1080)
         config.pixelFormat = kCVPixelFormatType_32BGRA
         config.showsCursor = false // Don't need cursor for context
+        config.scalesToFit = true
         
         // Create filter excluding our own window
         let filter = SCContentFilter(display: display, excludingWindows: [])
@@ -301,16 +361,20 @@ class ContextManager: ObservableObject {
                     return
                 }
                 
-                let recognizedStrings = request.results?.compactMap { result in
+                // Take only top 10 results to reduce processing time
+                let recognizedStrings = request.results?.prefix(10).compactMap { result in
                     (result as? VNRecognizedTextObservation)?.topCandidates(1).first?.string
                 } ?? []
                 
                 let extractedText = recognizedStrings.joined(separator: " ")
-                continuation.resume(returning: extractedText.isEmpty ? nil : extractedText)
+                // Truncate to save memory and processing time
+                let truncatedText = String(extractedText.prefix(1000)) // Max 1KB of text
+                continuation.resume(returning: truncatedText.isEmpty ? nil : truncatedText)
             }
             
             request.recognitionLevel = .fast // Use fast recognition for background monitoring
-            request.usesLanguageCorrection = true
+            request.usesLanguageCorrection = false // Disable for speed
+            request.minimumTextHeight = 0.05 // Only detect larger text for speed
             
             let handler = VNImageRequestHandler(cgImage: cgImage, options: [:])
             try? handler.perform([request])
@@ -501,6 +565,26 @@ class ContextManager: ObservableObject {
     func clearLockedContext() {
         hotkeyTriggeredContext = nil
         print("🔓 MANUALLY CLEARED LOCKED CONTEXT")
+    }
+    
+    // MARK: - Memory Management
+    
+    private func cleanupOldScreenshots() async {
+        await MainActor.run {
+            if let context = currentContext, context.timestamp.timeIntervalSinceNow < -30 {
+                // Remove screenshot from old context to save memory
+                currentContext = UserContext(
+                    appName: context.appName,
+                    windowTitle: context.windowTitle,
+                    screenshot: nil, // Clear old screenshot
+                    extractedText: context.extractedText,
+                    detectedActivity: context.detectedActivity,
+                    timestamp: context.timestamp,
+                    canWriteIntoApp: context.canWriteIntoApp
+                )
+                print("🧹 Cleaned up old screenshot to save memory")
+            }
+        }
     }
     
     private func bringAppToFrontAndType(appName: String, text: String) async {

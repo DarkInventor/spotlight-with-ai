@@ -141,7 +141,7 @@ class MemoryManager: ObservableObject {
         }
     }
     
-    func loadRecentMemory(limit: Int = 5) -> String {
+    func loadRecentMemory(limit: Int = 3) -> String { // Reduced from 5 to 3
         guard hasPermission else { return "" }
         
         do {
@@ -151,7 +151,10 @@ class MemoryManager: ObservableObject {
             let conversations = content.components(separatedBy: "## ").suffix(limit)
             let recentMemory = conversations.joined(separator: "## ")
             
-            return recentMemory.isEmpty ? "" : "Previous context:\n\(recentMemory)"
+            // Truncate to save memory and speed up AI processing
+            let truncatedMemory = String(recentMemory.prefix(2000)) // Max 2KB instead of full memory
+            
+            return truncatedMemory.isEmpty ? "" : "Previous context:\n\(truncatedMemory)"
         } catch {
             // If current file doesn't exist, try to create it
             if !FileManager.default.fileExists(atPath: currentFileURL.path) {

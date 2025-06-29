@@ -113,60 +113,60 @@ struct ContentView: View {
                 ScrollView {
                     VStack(spacing: 16) {
                         // Debug: Show current context and automation capabilities
-                        if let context = contextManager.currentContext {
-                            VStack(alignment: .leading, spacing: 4) {
-                                Text("📍 Context: \(context.detectedActivity)")
-                                    .font(.caption)
-                                    .foregroundColor(.secondary)
-                                Text("🖥️ App: \(context.appName)")
-                                    .font(.caption)
-                                    .foregroundColor(.secondary)
-                                if !context.windowTitle.isEmpty && context.windowTitle != "Unknown" {
-                                    Text("🪟 Window: \(context.windowTitle)")
-                                        .font(.caption)
-                                        .foregroundColor(.secondary)
-                                }
+                        // if let context = contextManager.currentContext {
+                        //     VStack(alignment: .leading, spacing: 4) {
+                        //         Text("📍 Context: \(context.detectedActivity)")
+                        //             .font(.caption)
+                        //             .foregroundColor(.secondary)
+                        //         Text("🖥️ App: \(context.appName)")
+                        //             .font(.caption)
+                        //             .foregroundColor(.secondary)
+                        //         if !context.windowTitle.isEmpty && context.windowTitle != "Unknown" {
+                        //             Text("🪟 Window: \(context.windowTitle)")
+                        //                 .font(.caption)
+                        //                 .foregroundColor(.secondary)
+                        //         }
                                 
-                                // Show automation capability
-                                HStack {
-                                    if automationManager.canAutomateApp(context.appName) {
-                                        Image(systemName: "checkmark.circle.fill")
-                                            .foregroundColor(.green)
-                                            .font(.caption)
-                                        Text("Automation supported")
-                                            .font(.caption)
-                                            .foregroundColor(.green)
-                                    } else {
-                                        Image(systemName: "exclamationmark.circle.fill")
-                                            .foregroundColor(.orange)
-                                            .font(.caption)
-                                        Text("Basic automation only")
-                                            .font(.caption)
-                                            .foregroundColor(.orange)
-                                    }
-                                }
+                        //         // Show automation capability
+                        //         HStack {
+                        //             if automationManager.canAutomateApp(context.appName) {
+                        //                 Image(systemName: "checkmark.circle.fill")
+                        //                     .foregroundColor(.green)
+                        //                     .font(.caption)
+                        //                 Text("Automation supported")
+                        //                     .font(.caption)
+                        //                     .foregroundColor(.green)
+                        //             } else {
+                        //                 Image(systemName: "exclamationmark.circle.fill")
+                        //                     .foregroundColor(.orange)
+                        //                     .font(.caption)
+                        //                 Text("Basic automation only")
+                        //                     .font(.caption)
+                        //                     .foregroundColor(.orange)
+                        //             }
+                        //         }
                                 
-                                HStack {
-                                    Button("🔄 Refresh Context") {
-                                        Task {
-                                            await contextManager.captureCurrentContext()
-                                        }
-                                    }
-                                    .font(.caption)
-                                    .buttonStyle(.borderless)
+                        //         HStack {
+                        //             Button("🔄 Refresh Context") {
+                        //                 Task {
+                        //                     await contextManager.captureCurrentContext()
+                        //                 }
+                        //             }
+                        //             .font(.caption)
+                        //             .buttonStyle(.borderless)
                                     
-                                    Button("🤖 Show Supported Apps") {
-                                        let apps = automationManager.getSupportedApps().joined(separator: ", ")
-                                        print("🤖 Supported Apps: \(apps)")
-                                    }
-                                    .font(.caption)
-                                    .buttonStyle(.borderless)
-                                }
-                            }
-                            .padding(8)
-                            .background(Color.secondary.opacity(0.1))
-                            .cornerRadius(8)
-                        }
+                        //             Button("🤖 Show Supported Apps") {
+                        //                 let apps = automationManager.getSupportedApps().joined(separator: ", ")
+                        //                 print("🤖 Supported Apps: \(apps)")
+                        //             }
+                        //             .font(.caption)
+                        //             .buttonStyle(.borderless)
+                        //         }
+                        //     }
+                        //     .padding(8)
+                        //     .background(Color.secondary.opacity(0.1))
+                        //     .cornerRadius(8)
+                        // }
                         
                         // Universal search results (shown above AI response when searching)
                         if showingUniversalResults {
@@ -499,8 +499,8 @@ struct ContentView: View {
             do {
                 let result: GenerateContentResponse
                 
-                // Load recent memory for context
-                let memoryContext = memoryManager.loadRecentMemory(limit: 5)
+                // Load recent memory for context (reduced from 5 to 3)
+                let memoryContext = memoryManager.loadRecentMemory(limit: 3)
                 
                 // Get contextual prompt that includes what user is currently doing
                 let contextualPrompt = contextManager.getContextualPrompt(for: userInput)
@@ -614,12 +614,12 @@ struct ContentView: View {
     private func handleUniversalSearchTextChange(_ newValue: String) {
         print("🔍 Universal search text changed to: '\(newValue)'")
         
-        // Real-time universal search as user types
-        if universalSearchManager.hasPermission && !newValue.isEmpty {
-            // Use DispatchQueue for debouncing instead of NSObject perform
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                // Only search if the text hasn't changed
-                if newValue == self.searchText && !self.searchText.isEmpty {
+        // Real-time universal search as user types (optimized debouncing)
+        if universalSearchManager.hasPermission && !newValue.isEmpty && newValue.count > 2 { // Only search after 3 chars
+            // Increased debouncing to reduce CPU load
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { // Increased from 0.3 to 0.5
+                // Only search if the text hasn't changed and is long enough
+                if newValue == self.searchText && !self.searchText.isEmpty && self.searchText.count > 2 {
                     self.universalSearchManager.search(query: self.searchText)
                 }
             }
@@ -802,8 +802,8 @@ struct ContentView: View {
                         
                         try await NSWorkspace.shared.openApplication(at: appURL, configuration: config)
                         
-                        // Wait for app to launch
-                        try await Task.sleep(nanoseconds: 2_000_000_000) // 2 seconds
+                        // Wait for app to launch (reduced from 2s to 1s)
+                        try await Task.sleep(nanoseconds: 1_000_000_000) // 1 second
                         
                         // If there's an additional action (like opening a URL), open it in the specific app
                         if let action = action, let url = URL(string: action) {
@@ -919,38 +919,38 @@ struct ContentView: View {
         switch appName.lowercased() {
         case let app where app.contains("safari"):
             script = """
-            tell application "Safari"
-                activate
-                delay 0.5
-                open location "\(escapedURL)"
-            end tell
+                         tell application "Safari"
+                 activate
+                 delay 0.3
+                 open location "\(escapedURL)"
+             end tell
             """
             
         case let app where app.contains("chrome"):
             script = """
-            tell application "Google Chrome"
-                activate
-                delay 0.5
-                open location "\(escapedURL)"
-            end tell
+                         tell application "Google Chrome"
+                 activate
+                 delay 0.3
+                 open location "\(escapedURL)"
+             end tell
             """
             
         case let app where app.contains("firefox"):
             script = """
-            tell application "Firefox"
-                activate
-                delay 0.5
-                open location "\(escapedURL)"
-            end tell
+                         tell application "Firefox"
+                 activate
+                 delay 0.3
+                 open location "\(escapedURL)"
+             end tell
             """
             
         default:
             script = """
-            tell application "\(escapedAppName)"
-                activate
-                delay 0.5
-                open location "\(escapedURL)"
-            end tell
+                         tell application "\(escapedAppName)"
+                 activate
+                 delay 0.3
+                 open location "\(escapedURL)"
+             end tell
             """
         }
         

@@ -175,7 +175,7 @@ class AppAutomationManager: ObservableObject {
             script = """
             tell application "\(escapedAppName)"
                 activate
-                delay 0.7
+                delay 0.3
                 
                 -- Get current URL to determine automation strategy
                 set currentURL to URL of active tab of first window
@@ -295,7 +295,7 @@ class AppAutomationManager: ObservableObject {
             script = """
             tell application "\(escapedAppName)"
                 activate
-                delay 0.7
+                delay 0.3
                 
                 tell application "System Events"
                     tell process "\(escapedAppName)"
@@ -321,7 +321,7 @@ class AppAutomationManager: ObservableObject {
             script = """
             tell application "\(escapedAppName)"
                 activate
-                delay 0.7
+                delay 0.3
                 
                 tell application "System Events"
                     tell process "\(escapedAppName)"
@@ -345,7 +345,7 @@ class AppAutomationManager: ObservableObject {
             script = """
             tell application "\(escapedAppName)"
                 activate
-                delay 0.7
+                delay 0.3
                 
                 tell application "System Events"
                     tell process "\(escapedAppName)"
