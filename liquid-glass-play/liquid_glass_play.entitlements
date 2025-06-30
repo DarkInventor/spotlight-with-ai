@@ -6,11 +6,25 @@
 	<true/>
 	<key>com.apple.security.app-sandbox</key>
 	<true/>
+	<key>com.apple.security.automation.apple-events</key>
+	<true/>
 	<key>com.apple.security.device.screen-capture</key>
 	<true/>
 	<key>com.apple.security.network.client</key>
 	<true/>
-	<key>com.apple.security.automation.apple-events</key>
-	<true/>
+	<key>com.apple.security.temporary-exception.apple-events</key>
+	<array>
+		<string>com.apple.systemevents</string>
+		<string>com.google.Chrome</string>
+		<string>com.microsoft.Word</string>
+		<string>com.microsoft.Excel</string>
+		<string>com.microsoft.PowerPoint</string>
+		<string>com.apple.Safari</string>
+		<string>com.apple.Pages</string>
+		<string>com.apple.Numbers</string>
+		<string>com.apple.Keynote</string>
+		<string>com.apple.TextEdit</string>
+		<string>com.apple.mail</string>
+	</array>
 </dict>
 </plist>

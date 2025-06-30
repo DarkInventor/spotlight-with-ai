@@ -5,44 +5,13 @@ import UniformTypeIdentifiers
 
 enum SearchResultCategory: String, CaseIterable {
     case applications = "Applications"
-    case documents = "Documents"
-    case pdfs = "PDFs"
-    case images = "Images"
-    case videos = "Videos"
-    case audio = "Audio"
-    case code = "Code"
-    case archives = "Archives"
-    case system = "System"
-    case others = "Others"
     
     var icon: String {
-        switch self {
-        case .applications: return "app"
-        case .documents: return "doc.text"
-        case .pdfs: return "doc.richtext"
-        case .images: return "photo"
-        case .videos: return "video"
-        case .audio: return "music.note"
-        case .code: return "chevron.left.forwardslash.chevron.right"
-        case .archives: return "archivebox"
-        case .system: return "gear"
-        case .others: return "doc"
-        }
+        return "app"
     }
     
     var color: String {
-        switch self {
-        case .applications: return "blue"
-        case .documents: return "green"
-        case .pdfs: return "red"
-        case .images: return "purple"
-        case .videos: return "orange"
-        case .audio: return "pink"
-        case .code: return "cyan"
-        case .archives: return "brown"
-        case .system: return "gray"
-        case .others: return "secondary"
-        }
+        return "blue"
     }
 }
 
@@ -90,7 +59,7 @@ class UniversalSearchManager: ObservableObject {
     @Published var searchResults: [CategoryResults] = []
     // Removed isSearching - we show instant results with no loading indicators
     
-    private var spotlightQuery: NSMetadataQuery?
+    // Removed spotlightQuery - APP SEARCH ONLY!
     private var currentSearchQuery: String = ""
     private let maxResultsPerCategory = 6
     private let permissionKey = "universalSearchPermissionGranted"
@@ -100,15 +69,10 @@ class UniversalSearchManager: ObservableObject {
     private var cacheBuilt: Bool = false
     
     init() {
-        self.hasPermission = UserDefaults.standard.bool(forKey: permissionKey)
-        
-        // Auto-grant permission for testing
-        if !UserDefaults.standard.bool(forKey: "universalSearchPermissionAsked") {
-            print("🔍 Auto-granting universal search permission")
-            self.hasPermission = true
-            UserDefaults.standard.set(true, forKey: permissionKey)
-            UserDefaults.standard.set(true, forKey: "universalSearchPermissionAsked")
-        }
+        // 🐱 CAT-SAVING: FORCE ENABLE UNIVERSAL SEARCH PERMISSION!
+        UserDefaults.standard.set(true, forKey: "universalSearchPermissionGranted")
+        UserDefaults.standard.set(true, forKey: "universalSearchPermissionAsked")
+        self.hasPermission = true
         
         // Build ultra-fast app cache on initialization
         Task {
@@ -118,18 +82,17 @@ class UniversalSearchManager: ObservableObject {
     
     @MainActor
     private func buildAppCache() async {
-        print("🚀 Building ULTRA-FAST app cache...")
+        print("🚀 Building LIGHTNING-FAST app cache - ONLY APPS!")
         
-        let fastSearchPaths = [
+        // Focus on essential app directories only
+        let essentialPaths = [
             "/Applications",
-            "/System/Applications",
-            "/System/Applications/Utilities",
-            NSHomeDirectory() + "/Applications"
+            "/System/Applications"
         ]
         
         var allApps: [UniversalSearchResult] = []
         
-        for searchPath in fastSearchPaths {
+        for searchPath in essentialPaths {
             guard FileManager.default.fileExists(atPath: searchPath) else { continue }
             
             do {
@@ -139,25 +102,23 @@ class UniversalSearchManager: ObservableObject {
                     options: [.skipsHiddenFiles, .skipsSubdirectoryDescendants]
                 )
                 
-                for url in contents {
-                    if url.pathExtension.lowercased() == "app" {
-                        let name = url.deletingPathExtension().lastPathComponent
-                        let path = url.path
-                        let icon = NSWorkspace.shared.icon(forFile: path)
-                        
-                        let result = UniversalSearchResult(
-                            name: name,
-                            path: path,
-                            category: .applications,
-                            icon: icon,
-                            size: nil,
-                            modifiedDate: nil,
-                            type: "Application",
-                            bundleIdentifier: nil,
-                            relevanceScore: nil
-                        )
-                        allApps.append(result)
-                    }
+                for url in contents where url.pathExtension.lowercased() == "app" {
+                    let name = url.deletingPathExtension().lastPathComponent
+                    let path = url.path
+                    let icon = NSWorkspace.shared.icon(forFile: path)
+                    
+                    let result = UniversalSearchResult(
+                        name: name,
+                        path: path,
+                        category: .applications,
+                        icon: icon,
+                        size: nil,
+                        modifiedDate: nil,
+                        type: "Application",
+                        bundleIdentifier: nil,
+                        relevanceScore: nil
+                    )
+                    allApps.append(result)
                 }
             } catch {
                 continue
@@ -166,7 +127,7 @@ class UniversalSearchManager: ObservableObject {
         
         self.appCache = allApps
         self.cacheBuilt = true
-        print("🎯 CACHE BUILT: \(allApps.count) apps ready for INSTANT search!")
+        print("🎯 ULTRA-FAST CACHE BUILT: \(allApps.count) essential apps ready for INSTANT search!")
     }
     
     func requestPermission() {
@@ -194,33 +155,24 @@ class UniversalSearchManager: ObservableObject {
             return
         }
         
-        // Cancel any existing search
-        stopCurrentSearch()
-        
         currentSearchQuery = query
-        print("🚀 FAST SEARCH for: '\(query)' - SAVING 2000 CATS!")
         
-        // Stage 1: INSTANT Applications search (no loading indicator)
+        // LIGHTNING FAST APP-ONLY SEARCH! 🚀 NO FILES, NO FOLDERS!
         Task {
-            await performFastApplicationsSearch(query: query)
-        }
-        
-        // Stage 2: Background comprehensive search (silent, no loading indicators)
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
-            self.searchWithSpotlight(query: query)
+            await performUltraFastAppOnlySearch(query: query)
         }
     }
     
     @MainActor
-    private func performFastApplicationsSearch(query: String) async {
-        print("⚡ INSTANT SEARCH: Faster than Raycast & Spotlight!")
+    private func performUltraFastAppOnlySearch(query: String) async {
+        print("🚀 ULTRA-FAST APP-ONLY SEARCH - NO FILES, NO FOLDERS, JUST APPS!")
         
         let lowercaseQuery = query.lowercased()
         var fastResults: [UniversalSearchResult] = []
         
         // Use ULTRA-FAST CACHE if available
         if cacheBuilt {
-            print("🚀 Using CACHE for INSTANT results!")
+            print("⚡ Using CACHED apps for INSTANT results!")
             
             for app in appCache {
                 let appNameLower = app.name.lowercased()
@@ -242,16 +194,11 @@ class UniversalSearchManager: ObservableObject {
                 }
             }
         } else {
-            print("⚡ Cache not ready, using direct search...")
-            // Fallback to direct search if cache not ready
-            let fastSearchPaths = [
-                "/Applications",
-                "/System/Applications",
-                "/System/Applications/Utilities",
-                NSHomeDirectory() + "/Applications"
-            ]
+            // If cache not ready, build it instantly with just essential app folders
+            print("🔧 Building minimal app cache on the fly...")
+            let essentialPaths = ["/Applications", "/System/Applications"]
             
-            for searchPath in fastSearchPaths {
+            for searchPath in essentialPaths {
                 guard FileManager.default.fileExists(atPath: searchPath) else { continue }
                 
                 do {
@@ -261,14 +208,11 @@ class UniversalSearchManager: ObservableObject {
                         options: [.skipsHiddenFiles, .skipsSubdirectoryDescendants]
                     )
                     
-                    for url in contents {
-                        if url.pathExtension.lowercased() == "app" {
-                            let appName = url.deletingPathExtension().lastPathComponent
-                            let appNameLower = appName.lowercased()
-                            if appNameLower.contains(lowercaseQuery) {
-                                if let result = createQuickAppResult(from: url, query: lowercaseQuery) {
-                                    fastResults.append(result)
-                                }
+                    for url in contents where url.pathExtension.lowercased() == "app" {
+                        let appName = url.deletingPathExtension().lastPathComponent
+                        if appName.lowercased().contains(lowercaseQuery) {
+                            if let result = createQuickAppResult(from: url, query: lowercaseQuery) {
+                                fastResults.append(result)
                             }
                         }
                     }
@@ -290,16 +234,18 @@ class UniversalSearchManager: ObservableObject {
             return first.name.lowercased() < second.name.lowercased()
         }
         
-        // Show immediate results if we found apps
+        // Show immediate results - APPS ONLY!
         if !fastResults.isEmpty {
             let appCategory = CategoryResults(
                 category: .applications,
-                results: Array(fastResults.prefix(maxResultsPerCategory)),
+                results: Array(fastResults.prefix(8)), // Show more apps since we only show apps
                 totalCount: fastResults.count
             )
             
             self.searchResults = [appCategory]
-            print("⚡ INSTANT RESULTS: Found \(fastResults.count) apps immediately!")
+            print("🎯 FOUND \(fastResults.count) APPS INSTANTLY! NO FILES, NO FOLDERS!")
+        } else {
+            self.searchResults = []
         }
     }
     
@@ -371,279 +317,42 @@ class UniversalSearchManager: ObservableObject {
         return score
     }
     
-    private func stopCurrentSearch() {
-        spotlightQuery?.stop()
-        spotlightQuery = nil
-    }
+    // REMOVED ALL HEAVY FILE/FOLDER SEARCHING! APP-ONLY SEARCH FOR MAXIMUM PERFORMANCE! 🚀
     
-    private func searchWithSpotlight(query: String) {
-        let metadataQuery = NSMetadataQuery()
-        self.spotlightQuery = metadataQuery
-        
-        // Comprehensive search predicate
-        let predicates = [
-            // File name contains query
-            NSPredicate(format: "kMDItemDisplayName LIKE[cd] '*\(query)*'"),
-            // Content contains query (for text files)
-            NSPredicate(format: "kMDItemTextContent LIKE[cd] '*\(query)*'"),
-            // Keywords contain query
-            NSPredicate(format: "kMDItemKeywords LIKE[cd] '*\(query)*'"),
-            // Title contains query
-            NSPredicate(format: "kMDItemTitle LIKE[cd] '*\(query)*'")
-        ]
-        
-        metadataQuery.predicate = NSCompoundPredicate(orPredicateWithSubpredicates: predicates)
-        metadataQuery.searchScopes = [
-            NSMetadataQueryLocalComputerScope,
-            NSMetadataQueryUserHomeScope
-        ]
-        
-        // Observe search completion
-        NotificationCenter.default.addObserver(
-            self,
-            selector: #selector(queryDidFinishGathering),
-            name: .NSMetadataQueryDidFinishGathering,
-            object: metadataQuery
-        )
-        
-        NotificationCenter.default.addObserver(
-            self,
-            selector: #selector(queryDidUpdate),
-            name: .NSMetadataQueryDidUpdate,
-            object: metadataQuery
-        )
-        
-        metadataQuery.start()
-        print("📡 Stage 2: Background comprehensive search started - CATS ARE SAFE!")
-        
-        // Timeout after 1 second for MAXIMUM responsiveness
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
-            if metadataQuery.isGathering {
-                self.processResults(from: metadataQuery)
-            }
-        }
-    }
-    
-    @objc private func queryDidFinishGathering(_ notification: Notification) {
-        guard let query = notification.object as? NSMetadataQuery else { return }
-        processResults(from: query)
-    }
-    
-    @objc private func queryDidUpdate(_ notification: Notification) {
-        guard let query = notification.object as? NSMetadataQuery else { return }
-        // Process partial results for real-time updates
-        processResults(from: query)
-    }
-    
-    private func processResults(from query: NSMetadataQuery) {
-        DispatchQueue.main.async {
-            var allResults: [UniversalSearchResult] = []
-            
-            query.disableUpdates()
-            
-            for i in 0..<query.resultCount {
-                if let item = query.result(at: i) as? NSMetadataItem {
-                    if let result = self.createSearchResult(from: item) {
-                        allResults.append(result)
-                    }
-                }
-            }
-            
-            query.enableUpdates()
-            
-            // Categorize and limit results (merging with fast results)
-            self.categorizeResults(allResults)
-            
-            print("🎯 Stage 2 COMPLETE: \(allResults.count) comprehensive results merged into \(self.searchResults.count) categories")
-        }
-    }
-    
-    private func createSearchResult(from item: NSMetadataItem) -> UniversalSearchResult? {
-        guard let path = item.value(forAttribute: NSMetadataItemPathKey) as? String,
-              let displayName = item.value(forAttribute: NSMetadataItemDisplayNameKey) as? String else {
-            return nil
-        }
-        
-        // Skip hidden files and system directories
-        if displayName.hasPrefix(".") || path.contains("/.") {
-            return nil
-        }
-        
-        let url = URL(fileURLWithPath: path)
-        let category = categorizeFile(at: url)
-        
-        // Get file attributes
-        let attributes = try? FileManager.default.attributesOfItem(atPath: path)
-        let size = formatFileSize(attributes?[.size] as? Int64)
-        let modifiedDate = attributes?[.modificationDate] as? Date
-        
-        // Get file type
-        let fileType = item.value(forAttribute: NSMetadataItemContentTypeKey) as? String
-        
-        // Get bundle identifier for apps
-        let bundleId = item.value(forAttribute: NSMetadataItemCFBundleIdentifierKey) as? String
-        
-        // Get icon
-        let icon = NSWorkspace.shared.icon(forFile: path)
-        
-        return UniversalSearchResult(
-            name: displayName,
-            path: path,
-            category: category,
-            icon: icon,
-            size: size,
-            modifiedDate: modifiedDate,
-            type: fileType,
-            bundleIdentifier: bundleId,
-            relevanceScore: nil // Comprehensive search doesn't need scoring
-        )
-    }
-    
-    private func categorizeFile(at url: URL) -> SearchResultCategory {
-        let pathExtension = url.pathExtension.lowercased()
-        let fileName = url.lastPathComponent.lowercased()
-        
-        // Applications - ONLY real Mac apps (.app bundles)
-        if pathExtension == "app" {
-            return .applications
-        }
-        
-        // Documents
-        let documentExtensions = ["doc", "docx", "rtf", "txt", "md", "pages", "odt", "tex"]
-        if documentExtensions.contains(pathExtension) {
-            return .documents
-        }
-        
-        // PDFs
-        if pathExtension == "pdf" {
-            return .pdfs
-        }
-        
-        // Images
-        let imageExtensions = ["jpg", "jpeg", "png", "gif", "bmp", "tiff", "svg", "webp", "heic", "heif", "raw"]
-        if imageExtensions.contains(pathExtension) {
-            return .images
-        }
-        
-        // Videos
-        let videoExtensions = ["mp4", "mov", "avi", "mkv", "wmv", "flv", "webm", "m4v", "3gp"]
-        if videoExtensions.contains(pathExtension) {
-            return .videos
-        }
-        
-        // Audio
-        let audioExtensions = ["mp3", "wav", "aac", "flac", "ogg", "m4a", "wma", "aiff"]
-        if audioExtensions.contains(pathExtension) {
-            return .audio
-        }
-        
-        // Code
-        let codeExtensions = ["swift", "js", "ts", "py", "java", "cpp", "c", "h", "css", "html", "xml", "json", "yaml", "yml", "php", "rb", "go", "rs", "kt", "scala", "sh", "bash", "zsh"]
-        if codeExtensions.contains(pathExtension) {
-            return .code
-        }
-        
-        // Archives
-        let archiveExtensions = ["zip", "rar", "7z", "tar", "gz", "bz2", "xz", "dmg", "pkg", "deb", "rpm"]
-        if archiveExtensions.contains(pathExtension) {
-            return .archives
-        }
-        
-        // System files
-        if url.path.hasPrefix("/System/") ||
-           url.path.hasPrefix("/usr/") ||
-           url.path.hasPrefix("/Library/") ||
-           pathExtension == "kext" ||
-           pathExtension == "plist" ||
-           fileName.contains("driver") {
-            return .system
-        }
-        
-        return .others
-    }
-    
-    private func categorizeResults(_ results: [UniversalSearchResult]) {
-        var categorizedResults: [SearchResultCategory: [UniversalSearchResult]] = [:]
-        
-        // Start with existing fast results (if any)
-        var existingPaths = Set<String>()
-        for categoryResult in searchResults {
-            for result in categoryResult.results {
-                existingPaths.insert(result.path)
-            }
-            
-            if categorizedResults[categoryResult.category] == nil {
-                categorizedResults[categoryResult.category] = []
-            }
-            categorizedResults[categoryResult.category]?.append(contentsOf: categoryResult.results)
-        }
-        
-        // Add new comprehensive results (avoiding duplicates)
-        for result in results {
-            if !existingPaths.contains(result.path) {
-                if categorizedResults[result.category] == nil {
-                    categorizedResults[result.category] = []
-                }
-                categorizedResults[result.category]?.append(result)
-            }
-        }
-        
-        // Create category results with limited items
-        var categoryResults: [CategoryResults] = []
-        
-        for category in SearchResultCategory.allCases {
-            if let results = categorizedResults[category], !results.isEmpty {
-                // Sort by relevance (name match first, then by modification date)
-                let sortedResults = results.sorted { first, second in
-                    // Prefer exact name matches
-                    let query = self.currentSearchQuery.lowercased()
-                    let firstExact = first.name.lowercased().hasPrefix(query)
-                    let secondExact = second.name.lowercased().hasPrefix(query)
-                    
-                    if firstExact && !secondExact { return true }
-                    if !firstExact && secondExact { return false }
-                    
-                    // Then by modification date (most recent first)
-                    return (first.modifiedDate ?? Date.distantPast) > (second.modifiedDate ?? Date.distantPast)
-                }
-                
-                let limitedResults = Array(sortedResults.prefix(maxResultsPerCategory))
-                
-                categoryResults.append(CategoryResults(
-                    category: category,
-                    results: limitedResults,
-                    totalCount: results.count
-                ))
-            }
-        }
-        
-        // Sort categories by relevance (Applications first, then by result count)
-        categoryResults.sort { first, second in
-            if first.category == .applications { return true }
-            if second.category == .applications { return false }
-            return first.totalCount > second.totalCount
-        }
-        
-        self.searchResults = categoryResults
-        print("🔄 MERGED RESULTS: Fast + Comprehensive = \(categoryResults.count) categories")
-    }
-    
-    private func formatFileSize(_ bytes: Int64?) -> String? {
-        guard let bytes = bytes else { return nil }
-        
-        let formatter = ByteCountFormatter()
-        formatter.allowedUnits = [.useKB, .useMB, .useGB]
-        formatter.countStyle = .file
-        return formatter.string(fromByteCount: bytes)
-    }
-    
+    // SIMPLIFIED - APP-ONLY LAUNCHER! 🚀
     func openFile(_ result: UniversalSearchResult) {
         let url = URL(fileURLWithPath: result.path)
         NSWorkspace.shared.open(url)
     }
     
-    deinit {
-        stopCurrentSearch()
-        NotificationCenter.default.removeObserver(self)
+    /// Search installed apps in /Applications and /System/Applications, returning results matching the query (case-insensitive, substring match).
+    func searchInstalledApps(query: String) -> [UniversalSearchResult] {
+        guard !query.isEmpty else { return [] }
+        let lowercaseQuery = query.lowercased()
+        var results: [UniversalSearchResult] = []
+        let appDirs = ["/Applications", "/System/Applications"]
+        for dir in appDirs {
+            guard let contents = try? FileManager.default.contentsOfDirectory(at: URL(fileURLWithPath: dir), includingPropertiesForKeys: nil, options: [.skipsHiddenFiles, .skipsSubdirectoryDescendants]) else { continue }
+            for url in contents where url.pathExtension.lowercased() == "app" {
+                let name = url.deletingPathExtension().lastPathComponent
+                if name.lowercased().contains(lowercaseQuery) {
+                    let icon = NSWorkspace.shared.icon(forFile: url.path)
+                    let result = UniversalSearchResult(
+                        name: name,
+                        path: url.path,
+                        category: .applications,
+                        icon: icon,
+                        size: nil,
+                        modifiedDate: nil,
+                        type: "Application",
+                        bundleIdentifier: nil,
+                        relevanceScore: nil
+                    )
+                    results.append(result)
+                }
+            }
+        }
+        // Sort by name for consistency
+        return results.sorted { $0.name.lowercased() < $1.name.lowercased() }
     }
 } 

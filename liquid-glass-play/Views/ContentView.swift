@@ -30,7 +30,7 @@ struct ContentView: View {
             VStack(spacing: 8) {
                 // Search bar with screenshot button
                 HStack(spacing: 12) {
-                    SearchBar(text: $searchText, onSubmit: handleSearch, onImageDrop: handleImageDrop)
+                    SearchBar(text: $searchText, onSubmit: handleSearch, onImageDrop: handleImageDrop, contextManager: contextManager)
                         .frame(maxWidth: .infinity)
                         .onChange(of: searchText) { newValue in
                             handleUniversalSearchTextChange(newValue)
@@ -312,6 +312,14 @@ struct ContentView: View {
                 // Capture context for the specific app that was frontmost
                 if let app = notification.object as? NSRunningApplication {
                     print("🎯 ContentView: Received context capture notification for \(app.localizedName ?? "Unknown")")
+                    
+                    // 🐱 CAT-SAVING: Capture Word cursor position if it's Word
+                    if app.bundleIdentifier == "com.microsoft.Word" || 
+                       app.localizedName?.lowercased().contains("word") == true {
+                        print("📍 🐱 Capturing Word cursor position before switching away!")
+                        await automationManager.captureWordCursorPosition()
+                    }
+                    
                     await contextManager.captureContextForApp(app)
                     
                     // Force UI update
@@ -319,6 +327,12 @@ struct ContentView: View {
                         print("🔄 Current context after capture: \(contextManager.currentContext?.appName ?? "None")")
                     }
                 }
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("HideSearchWindow"))) { _ in
+            print("📱 Received HideSearchWindow notification")
+            if let windowManager = NSApp.delegate as? WindowManager {
+                windowManager.hideWindow()
             }
         }
         .onAppear {
@@ -528,8 +542,15 @@ struct ContentView: View {
                 response = LocalizedStringKey(resultText)
                 responseText = resultText
                 
-                // Check if this looks like a writing request and we can write to current app
-                shouldWriteToApp = isWritingRequest(userInput) && (contextManager.currentContext?.canWriteIntoApp ?? false)
+                // 🎯 SMART BUTTON DETECTION - Always show button for supported apps!
+                // Don't rely on keywords - if we can write to the app, show the button!
+                if let context = contextManager.currentContext, context.canWriteIntoApp {
+                    shouldWriteToApp = true
+                    print("✅ SHOWING WRITE BUTTON for \(context.appName) - No keywords needed!")
+                } else {
+                    shouldWriteToApp = false
+                    print("❌ No valid app context for writing")
+                }
                 
                 // Save conversation to memory
                 memoryManager.saveConversation(
@@ -601,12 +622,83 @@ struct ContentView: View {
     // MARK: - Universal Search Methods
     
     private func handleSearch() {
-        print("🚀 ENTER PRESSED - DIRECT AI CHAT! Saving cats & dogs!")
+        print("🚀 ENTER PRESSED - SMART APP DETECTION! Saving cats & dogs!")
+        
+        // 🔍 FORCE CONTEXT CAPTURE TO ENSURE WE HAVE THE RIGHT CONTEXT!
+        Task {
+            await contextManager.captureCurrentContext()
+        }
         
         // Clear any universal search results when user explicitly presses Enter
         showingUniversalResults = false
         universalSearchManager.searchResults = []
         
+        // 🎯 DEBUG: Print current context details
+        if let context = contextManager.currentContext {
+            print("📊 CURRENT CONTEXT DEBUG:")
+            print("   - App Name: '\(context.appName)'")
+            print("   - App Name (lowercase): '\(context.appName.lowercased())'")
+            print("   - Window Title: '\(context.windowTitle)'")
+            print("   - Can Write Into App: \(context.canWriteIntoApp)")
+            print("   - Detected Activity: '\(context.detectedActivity)'")
+        } else {
+            print("❌ NO CURRENT CONTEXT FOUND!")
+        }
+        
+        // 🎯 SMART APP DETECTION - Check if current context is any supported app
+        if let context = contextManager.currentContext, context.canWriteIntoApp {
+            let appName = context.appName.lowercased()
+            print("✅ CONTEXT FOUND - PROCEEDING WITH APP-SPECIFIC AUTOMATION for: '\(appName)'")
+            
+            // 📱 MINIMIZE SEARCHFAST IMMEDIATELY for ALL supported apps!
+            print("📱 MINIMIZING SearchFast immediately for \(context.appName)!")
+            if let windowManager = NSApp.delegate as? WindowManager {
+                windowManager.hideWindow()
+            }
+            
+            // Detect supported apps automatically - NO KEYWORDS REQUIRED!
+            if appName.contains("cursor") {
+                print("🎯 CURSOR DETECTED - Auto-code writing mode!")
+                handleCursorAutoWriteMinimized()
+                return
+            } else if appName.contains("microsoft word") || appName.contains("word") {
+                print("📝 MICROSOFT WORD DETECTED - Auto-document writing mode!")
+                handleWordAutoWriteMinimized()
+                return
+            } else if appName.contains("microsoft excel") || appName.contains("excel") {
+                print("📊 EXCEL DETECTED - Auto-spreadsheet writing mode!")
+                handleExcelAutoWriteMinimized()
+                return
+            } else if appName.contains("visual studio code") || appName.contains("vs code") {
+                print("💻 VS CODE DETECTED - Auto-code writing mode!")
+                handleVSCodeAutoWriteMinimized()
+                return
+            } else if appName.contains("xcode") {
+                print("🔨 XCODE DETECTED - Auto-code writing mode!")
+                handleXcodeAutoWriteMinimized()
+                return
+            } else if appName.contains("pages") {
+                print("📄 PAGES DETECTED - Auto-document writing mode!")
+                handlePagesAutoWriteMinimized()
+                return
+            } else if appName.contains("keynote") {
+                print("🎬 KEYNOTE DETECTED - Auto-presentation writing mode!")
+                handleKeynoteAutoWriteMinimized()
+                return
+            } else {
+                print("📝 SUPPORTED APP DETECTED: \(context.appName) - Auto-writing mode!")
+                handleGenericAppAutoWriteMinimized(appName: context.appName)
+                return
+            }
+        } else {
+            print("❌ NO VALID CONTEXT OR APP DOESN'T SUPPORT WRITING")
+            if let context = contextManager.currentContext {
+                print("   - Current app: '\(context.appName)'")
+                print("   - Can write: \(context.canWriteIntoApp)")
+            }
+        }
+        
+        print("🤖 FALLING BACK TO GENERAL AI RESPONSE")
         // DIRECTLY go to AI chat when Enter is pressed - this is what users expect!
         generateResponse()
     }
@@ -676,14 +768,411 @@ struct ContentView: View {
     }
     
     private func writeToCurrentApp() {
-        Task {
-            await contextManager.writeIntoCurrentApp(responseText)
+        guard let context = contextManager.currentContext else {
+            print("❌ No current context for writing")
             shouldWriteToApp = false
+            return
+        }
+        
+        let appName = context.appName.lowercased()
+        
+        // 🐱 CAT-SAVING STRATEGY: NEVER hide search window until AFTER successful automation!
+        Task {
+            print("📝 🐱 Starting CAT-SAVING automation for \(context.appName)")
+            print("🎯 CRITICAL: Keeping search window visible to maintain focus chain")
             
-            // Hide window after writing
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+            // Use app-specific advanced automation with clean content extraction
+            let success = await automationManager.automateWriting(text: responseText, targetApp: context.appName)
+            
+            await MainActor.run {
+                shouldWriteToApp = false
+                
+                if success {
+                    print("✅ 🐱 CATS SAVED! Successfully wrote to \(context.appName)")
+                    // ONLY hide search window AFTER successful automation
+                    if let windowManager = NSApp.delegate as? WindowManager {
+                        windowManager.hideWindow()
+                    }
+                } else {
+                    print("❌ Automation failed for \(context.appName) - keeping search window visible")
+                    // Keep window visible if automation failed
+                }
+            }
+        }
+    }
+    
+    private func handleWordAutoWrite() {
+        // Set loading state immediately
+        isLoading = true
+        response = ""
+        responseText = ""
+        
+        // Hide search window immediately when user presses enter for Word
                 if let windowManager = NSApp.delegate as? WindowManager {
                     windowManager.hideWindow()
+                }
+        
+        Task {
+            do {
+                // Get contextual prompt for better responses
+                let contextualPrompt = contextManager.getContextualPrompt(for: searchText)
+                
+                // Generate AI response
+                print("🤖 Generating AI response for Word...")
+                let prompt = """
+                Please provide a clear, well-structured response to the user's request. 
+                Focus on delivering clean, professional content suitable for a Microsoft Word document.
+                Avoid unnecessary explanations or meta-commentary.
+                
+                \(contextualPrompt)
+                """
+                
+                let result = try await model.generateContent(prompt)
+                
+                if let text = result.text {
+                    let cleanText = text.trimmingCharacters(in: .whitespacesAndNewlines)
+                    
+                    await MainActor.run {
+                        response = LocalizedStringKey(cleanText)
+                        responseText = cleanText
+                        isLoading = false
+                    }
+                    
+                    // Automatically write to Word using the advanced automation
+                    print("📝 Auto-writing to Microsoft Word...")
+                    let success = await automationManager.automateWriting(text: cleanText, targetApp: "Microsoft Word")
+                    
+                    await MainActor.run {
+                        if success {
+                            print("✅ Successfully auto-wrote to Microsoft Word!")
+                        } else {
+                            print("❌ Failed to auto-write to Microsoft Word")
+                            // Show window again if writing failed
+                            if let windowManager = NSApp.delegate as? WindowManager {
+                                windowManager.forceShowWindow()
+                            }
+                        }
+                    }
+                } else {
+                    await MainActor.run {
+                        response = "Sorry, I couldn't generate a response."
+                        responseText = "Sorry, I couldn't generate a response."
+                        isLoading = false
+                        
+                        // Show window again if generation failed
+                        if let windowManager = NSApp.delegate as? WindowManager {
+                            windowManager.forceShowWindow()
+                        }
+                    }
+                }
+                
+                // Clear search text after processing
+                await MainActor.run {
+                    searchText = ""
+                }
+                
+            } catch {
+                print("❌ Error in Word auto-write: \(error)")
+                
+                await MainActor.run {
+                    response = "Sorry, there was an error generating the response."
+                    responseText = "Sorry, there was an error generating the response."
+                    isLoading = false
+                    
+                    // Show window again if there was an error
+                    if let windowManager = NSApp.delegate as? WindowManager {
+                        windowManager.forceShowWindow()
+                    }
+                }
+            }
+        }
+    }
+    
+    // MARK: - MINIMIZED Auto-Write Functions (Window already hidden)
+    
+    private func handleCursorAutoWriteMinimized() {
+        handleAutoWriteForAppMinimized(appName: "Cursor", appType: .codeEditor, prompt: """
+        Please provide clean, executable code for the user's request. 
+        Focus on delivering only the code without explanations.
+        """)
+    }
+    
+    private func handleWordAutoWriteMinimized() {
+        handleAutoWriteForAppMinimized(appName: "Microsoft Word", appType: .document, prompt: """
+        Please provide a clear, well-structured response to the user's request. 
+        Focus on delivering clean, professional content suitable for a Microsoft Word document.
+        Avoid unnecessary explanations or meta-commentary.
+        """)
+    }
+    
+    private func handleExcelAutoWriteMinimized() {
+        handleAutoWriteForAppMinimized(appName: "Microsoft Excel", appType: .spreadsheet, prompt: """
+        Please provide clear, structured content suitable for Microsoft Excel.
+        Focus on delivering data, formulas, or content that works well in spreadsheets.
+        Avoid unnecessary explanations.
+        """)
+    }
+    
+    private func handleVSCodeAutoWriteMinimized() {
+        handleAutoWriteForAppMinimized(appName: "Visual Studio Code", appType: .codeEditor, prompt: """
+        Please provide clean, executable code for the user's request.
+        Focus on delivering only the code without explanations.
+        """)
+    }
+    
+    private func handleXcodeAutoWriteMinimized() {
+        handleAutoWriteForAppMinimized(appName: "Xcode", appType: .codeEditor, prompt: """
+        Please provide clean, executable Swift/Objective-C code for the user's request.
+        Focus on delivering only the code without explanations.
+        """)
+    }
+    
+    private func handlePagesAutoWriteMinimized() {
+        handleAutoWriteForAppMinimized(appName: "Pages", appType: .document, prompt: """
+        Please provide clear, well-structured content suitable for Apple Pages.
+        Focus on delivering clean, professional content without unnecessary explanations.
+        """)
+    }
+    
+    private func handleKeynoteAutoWriteMinimized() {
+        handleAutoWriteForAppMinimized(appName: "Keynote", appType: .presentation, prompt: """
+        Please provide clear, concise content suitable for Keynote presentations.
+        Focus on bullet points, short phrases, or slide content.
+        Avoid lengthy explanations.
+        """)
+    }
+    
+    private func handleGenericAppAutoWriteMinimized(appName: String) {
+        handleAutoWriteForAppMinimized(appName: appName, appType: .generic, prompt: """
+        Please provide clear, well-structured content for the user's request.
+        Focus on delivering clean content without unnecessary explanations.
+        """)
+    }
+    
+    // MARK: - LEGACY Auto-Write Functions (for button clicks - these hide window)
+    
+    private func handleCursorAutoWrite() {
+        handleAutoWriteForApp(appName: "Cursor", appType: .codeEditor, prompt: """
+        Please provide clean, executable code for the user's request. 
+        Focus on delivering only the code without explanations.
+        """)
+    }
+    
+    private func handleExcelAutoWrite() {
+        handleAutoWriteForApp(appName: "Microsoft Excel", appType: .spreadsheet, prompt: """
+        Please provide clear, structured content suitable for Microsoft Excel.
+        Focus on delivering data, formulas, or content that works well in spreadsheets.
+        Avoid unnecessary explanations.
+        """)
+    }
+    
+    private func handleVSCodeAutoWrite() {
+        handleAutoWriteForApp(appName: "Visual Studio Code", appType: .codeEditor, prompt: """
+        Please provide clean, executable code for the user's request.
+        Focus on delivering only the code without explanations.
+        """)
+    }
+    
+    private func handleXcodeAutoWrite() {
+        handleAutoWriteForApp(appName: "Xcode", appType: .codeEditor, prompt: """
+        Please provide clean, executable Swift/Objective-C code for the user's request.
+        Focus on delivering only the code without explanations.
+        """)
+    }
+    
+    private func handlePagesAutoWrite() {
+        handleAutoWriteForApp(appName: "Pages", appType: .document, prompt: """
+        Please provide clear, well-structured content suitable for Apple Pages.
+        Focus on delivering clean, professional content without unnecessary explanations.
+        """)
+    }
+    
+    private func handleKeynoteAutoWrite() {
+        handleAutoWriteForApp(appName: "Keynote", appType: .presentation, prompt: """
+        Please provide clear, concise content suitable for Keynote presentations.
+        Focus on bullet points, short phrases, or slide content.
+        Avoid lengthy explanations.
+        """)
+    }
+    
+    private func handleGenericAppAutoWrite(appName: String) {
+        handleAutoWriteForApp(appName: appName, appType: .generic, prompt: """
+        Please provide clear, well-structured content for the user's request.
+        Focus on delivering clean content without unnecessary explanations.
+        """)
+    }
+    
+    enum AppType {
+        case codeEditor
+        case document
+        case spreadsheet
+        case presentation
+        case generic
+    }
+    
+    private func handleAutoWriteForAppMinimized(appName: String, appType: AppType, prompt: String) {
+        // Set loading state immediately
+        isLoading = true
+        response = ""
+        responseText = ""
+        
+        // 📱 WINDOW ALREADY MINIMIZED! Don't hide again.
+        print("📱 Window already minimized - proceeding with generation and writing...")
+        
+        Task {
+            do {
+                // Get contextual prompt for better responses
+                let contextualPrompt = contextManager.getContextualPrompt(for: searchText)
+                
+                // Generate AI response
+                print("🤖 Generating AI response for \(appName)...")
+                let fullPrompt = """
+                \(prompt)
+                
+                \(contextualPrompt)
+                """
+                
+                let result = try await model.generateContent(fullPrompt)
+                
+                if let text = result.text {
+                    let cleanText = text.trimmingCharacters(in: .whitespacesAndNewlines)
+                    
+                    await MainActor.run {
+                        response = LocalizedStringKey(cleanText)
+                        responseText = cleanText
+                        isLoading = false
+                    }
+                    
+                    // Automatically write to the target app using the advanced automation
+                    print("📝 Auto-writing to \(appName)...")
+                    let success = await automationManager.automateWriting(text: cleanText, targetApp: appName)
+                    
+                    await MainActor.run {
+                        if success {
+                            print("✅ Successfully auto-wrote to \(appName)!")
+                        } else {
+                            print("❌ Failed to auto-write to \(appName)")
+                            // Show window again if writing failed
+                            if let windowManager = NSApp.delegate as? WindowManager {
+                                windowManager.showWindow()
+                            }
+                        }
+                    }
+                } else {
+                    await MainActor.run {
+                        response = "Sorry, I couldn't generate a response."
+                        responseText = "Sorry, I couldn't generate a response."
+                        isLoading = false
+                        
+                        // Show window again if generation failed
+                        if let windowManager = NSApp.delegate as? WindowManager {
+                            windowManager.showWindow()
+                        }
+                    }
+                }
+                
+                // Clear search text after processing
+                await MainActor.run {
+                    searchText = ""
+                }
+                
+            } catch {
+                print("❌ Error in auto-write: \(error)")
+                
+                await MainActor.run {
+                    response = "Sorry, there was an error generating the response."
+                    responseText = "Sorry, there was an error generating the response."
+                    isLoading = false
+                    
+                    // Show window again if there was an error
+                    if let windowManager = NSApp.delegate as? WindowManager {
+                        windowManager.showWindow()
+                    }
+                }
+            }
+        }
+    }
+    
+    private func handleAutoWriteForApp(appName: String, appType: AppType, prompt: String) {
+        // Set loading state immediately
+        isLoading = true
+        response = ""
+        responseText = ""
+        
+        // Hide search window immediately when user presses enter
+        if let windowManager = NSApp.delegate as? WindowManager {
+            windowManager.hideWindow()
+        }
+        
+        Task {
+            do {
+                // Get contextual prompt for better responses
+                let contextualPrompt = contextManager.getContextualPrompt(for: searchText)
+                
+                // Generate AI response
+                print("🤖 Generating AI response for \(appName)...")
+                let fullPrompt = """
+                \(prompt)
+                
+                \(contextualPrompt)
+                """
+                
+                let result = try await model.generateContent(fullPrompt)
+                
+                if let text = result.text {
+                    let cleanText = text.trimmingCharacters(in: .whitespacesAndNewlines)
+                    
+                    await MainActor.run {
+                        response = LocalizedStringKey(cleanText)
+                        responseText = cleanText
+                        isLoading = false
+                    }
+                    
+                    // Automatically write to the target app using the advanced automation
+                    print("📝 Auto-writing to \(appName)...")
+                    let success = await automationManager.automateWriting(text: cleanText, targetApp: appName)
+                    
+                    await MainActor.run {
+                        if success {
+                            print("✅ Successfully auto-wrote to \(appName)!")
+                        } else {
+                            print("❌ Failed to auto-write to \(appName)")
+                            // Show window again if writing failed
+                            if let windowManager = NSApp.delegate as? WindowManager {
+                                windowManager.forceShowWindow()
+                            }
+                        }
+                    }
+                } else {
+                    await MainActor.run {
+                        response = "Sorry, I couldn't generate a response."
+                        responseText = "Sorry, I couldn't generate a response."
+                        isLoading = false
+                        
+                        // Show window again if generation failed
+                        if let windowManager = NSApp.delegate as? WindowManager {
+                            windowManager.forceShowWindow()
+                        }
+                    }
+                }
+                
+                // Clear search text after processing
+                await MainActor.run {
+                    searchText = ""
+                }
+                
+            } catch {
+                print("❌ Error in auto-write: \(error)")
+                
+                await MainActor.run {
+                    response = "Sorry, there was an error generating the response."
+                    responseText = "Sorry, there was an error generating the response."
+                    isLoading = false
+                    
+                    // Show window again if there was an error
+                    if let windowManager = NSApp.delegate as? WindowManager {
+                        windowManager.forceShowWindow()
+                    }
                 }
             }
         }
@@ -693,26 +1182,23 @@ struct ContentView: View {
     
     private func isAppLaunchRequest(_ userInput: String) -> Bool {
         let inputLower = userInput.lowercased()
-        let launchKeywords = ["open", "launch", "start", "run"]
-        let appKeywords = ["safari", "chrome", "firefox", "word", "excel", "powerpoint", "pages", "numbers", "keynote", "xcode", "vs code", "visual studio", "slack", "discord", "spotify", "finder", "mail", "messages", "facetime", "zoom", "teams"]
-        
+        let launchKeywords = ["open", "launch", "start", "run", "search"]
+        let appKeywords = ["safari", "chrome", "google chrome", "firefox", "word", "excel", "powerpoint", "pages", "numbers", "keynote", "xcode", "vs code", "visual studio", "cursor", "slack", "discord", "spotify", "finder", "mail", "messages", "facetime", "zoom", "teams"]
         let hasLaunchKeyword = launchKeywords.contains { inputLower.contains($0) }
         let hasAppKeyword = appKeywords.contains { inputLower.contains($0) }
-        
-        return hasLaunchKeyword && hasAppKeyword
+        // Also catch 'search ... on chrome' and similar
+        let matchesSearchOnApp = inputLower.range(of: #"search (.+) on (chrome|google chrome|safari|firefox)"#, options: .regularExpression) != nil
+        return (hasLaunchKeyword && hasAppKeyword) || matchesSearchOnApp
     }
     
     private func handleAppLaunchRequest(_ userInput: String) {
         let inputLower = userInput.lowercased()
-        
-        // Extract app name and any additional actions
         var appToLaunch: String?
         var additionalAction: String?
-        
-        // App mapping with bundle IDs
         let appMappings: [String: (name: String, bundleId: String)] = [
             "safari": ("Safari", "com.apple.Safari"),
             "chrome": ("Google Chrome", "com.google.Chrome"),
+            "google chrome": ("Google Chrome", "com.google.Chrome"),
             "firefox": ("Firefox", "org.mozilla.firefox"),
             "word": ("Microsoft Word", "com.microsoft.Word"),
             "excel": ("Microsoft Excel", "com.microsoft.Excel"),
@@ -723,6 +1209,7 @@ struct ContentView: View {
             "xcode": ("Xcode", "com.apple.dt.Xcode"),
             "vs code": ("Visual Studio Code", "com.microsoft.VSCode"),
             "visual studio": ("Visual Studio Code", "com.microsoft.VSCode"),
+            "cursor": ("Cursor", "com.todesktop.230313mzl4w4u92"),
             "slack": ("Slack", "com.tinyspeck.slackmacgap"),
             "discord": ("Discord", "com.hnc.Discord"),
             "spotify": ("Spotify", "com.spotify.client"),
@@ -733,110 +1220,115 @@ struct ContentView: View {
             "zoom": ("zoom.us", "us.zoom.xos"),
             "teams": ("Microsoft Teams", "com.microsoft.teams")
         ]
-        
-        // Find which app to launch
-        for (keyword, app) in appMappings {
-            if inputLower.contains(keyword) {
-                appToLaunch = app.name
-                break
+        // 1. Check for 'search ... on chrome' pattern
+        if let match = inputLower.range(of: #"search (.+) on (chrome|google chrome|safari|firefox)"#, options: .regularExpression) {
+            let matchedString = String(inputLower[match])
+            let regex = try! NSRegularExpression(pattern: #"search (.+) on (chrome|google chrome|safari|firefox)"#)
+            if let result = regex.firstMatch(in: matchedString, options: [], range: NSRange(location: 0, length: matchedString.utf16.count)),
+               let searchRange = Range(result.range(at: 1), in: matchedString),
+               let appRange = Range(result.range(at: 2), in: matchedString) {
+                let searchTerm = String(matchedString[searchRange]).trimmingCharacters(in: .whitespacesAndNewlines)
+                let appName = String(matchedString[appRange]).trimmingCharacters(in: .whitespacesAndNewlines)
+                appToLaunch = appMappings[appName]?.name ?? appName.capitalized
+                // Build Google search URL
+                let encoded = searchTerm.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? searchTerm
+                additionalAction = "https://www.google.com/search?q=\(encoded)"
             }
-        }
-        
-        // Check for additional actions (like "search yahoo")
-        if inputLower.contains("search") {
-            if inputLower.contains("yahoo") {
-                additionalAction = "https://www.yahoo.com"
-            } else if inputLower.contains("google") {
-                additionalAction = "https://www.google.com"
-            } else if inputLower.contains("bing") {
-                additionalAction = "https://www.bing.com"
-            } else if inputLower.contains("duckduckgo") || inputLower.contains("duck duck go") {
-                additionalAction = "https://duckduckgo.com"
-            } else {
-                // Extract search term if no specific search engine mentioned
-                let words = inputLower.components(separatedBy: .whitespaces)
-                if let searchIndex = words.firstIndex(of: "search"), searchIndex + 1 < words.count {
-                    let searchTerms = words[(searchIndex + 1)...].joined(separator: "+")
-                    // Default to Google if no search engine specified
-                    additionalAction = "https://www.google.com/search?q=\(searchTerms)"
+        } else {
+            // Fallback: original logic
+            for (keyword, app) in appMappings {
+                if inputLower.contains(keyword) {
+                    appToLaunch = app.name
+                    break
+                }
+            }
+            // Check for additional actions (like "search yahoo")
+            if inputLower.contains("search") {
+                let words = inputLower.components(separatedBy: " ")
+                if let idx = words.firstIndex(of: "search"), words.count > idx + 1 {
+                    let searchTerm = words[(idx+1)...].joined(separator: " ")
+                    let encoded = searchTerm.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? searchTerm
+                    additionalAction = "https://www.google.com/search?q=\(encoded)"
+                }
+            }
+            // Check for direct URL navigation
+            if inputLower.contains("go to") || inputLower.contains("visit") || inputLower.contains("open") {
+                if inputLower.contains("youtube") {
+                    additionalAction = "https://www.youtube.com"
+                } else if inputLower.contains("github") {
+                    additionalAction = "https://github.com"
+                } else if inputLower.contains("stackoverflow") || inputLower.contains("stack overflow") {
+                    additionalAction = "https://stackoverflow.com"
+                } else if inputLower.contains("reddit") {
+                    additionalAction = "https://www.reddit.com"
+                } else if inputLower.contains("twitter") {
+                    additionalAction = "https://twitter.com"
+                } else if inputLower.contains("facebook") {
+                    additionalAction = "https://www.facebook.com"
+                } else if inputLower.contains("instagram") {
+                    additionalAction = "https://www.instagram.com"
+                } else if inputLower.contains("linkedin") {
+                    additionalAction = "https://www.linkedin.com"
                 }
             }
         }
-        
-        // Check for direct URL navigation
-        if inputLower.contains("go to") || inputLower.contains("visit") || inputLower.contains("open") {
-            if inputLower.contains("youtube") {
-                additionalAction = "https://www.youtube.com"
-            } else if inputLower.contains("github") {
-                additionalAction = "https://github.com"
-            } else if inputLower.contains("stackoverflow") || inputLower.contains("stack overflow") {
-                additionalAction = "https://stackoverflow.com"
-            } else if inputLower.contains("reddit") {
-                additionalAction = "https://www.reddit.com"
-            } else if inputLower.contains("twitter") {
-                additionalAction = "https://twitter.com"
-            } else if inputLower.contains("facebook") {
-                additionalAction = "https://www.facebook.com"
-            } else if inputLower.contains("instagram") {
-                additionalAction = "https://www.instagram.com"
-            } else if inputLower.contains("linkedin") {
-                additionalAction = "https://www.linkedin.com"
-            }
-        }
-        
         executeAppLaunch(appName: appToLaunch, action: additionalAction, originalRequest: userInput)
     }
     
     private func executeAppLaunch(appName: String?, action: String?, originalRequest: String) {
         Task {
             isLoading = true
-            
             do {
                 if let appName = appName {
                     // Launch the app
-                    if let appURL = NSWorkspace.shared.urlForApplication(withBundleIdentifier: getBundleId(for: appName)) ??
-                                   findAppByName(appName) {
-                        
+                    if let appURL = NSWorkspace.shared.urlForApplication(withBundleIdentifier: getBundleId(for: appName)) ?? findAppByName(appName) {
                         let config = NSWorkspace.OpenConfiguration()
                         config.activates = true
-                        
                         try await NSWorkspace.shared.openApplication(at: appURL, configuration: config)
-                        
-                        // Wait for app to launch (reduced from 2s to 1s)
-                        try await Task.sleep(nanoseconds: 1_000_000_000) // 1 second
-                        
+                        // Wait for app to launch (retry up to 3s)
+                        var launched = false
+                        for _ in 0..<6 {
+                            if NSWorkspace.shared.runningApplications.contains(where: { $0.bundleIdentifier == getBundleId(for: appName) }) {
+                                launched = true
+                                break
+                            }
+                            try await Task.sleep(nanoseconds: 500_000_000) // 0.5s
+                        }
+                        if !launched {
+                            response = LocalizedStringKey("❌ Could not launch \(appName). Is it installed?")
+                            responseText = "❌ Could not launch \(appName). Is it installed?"
+                            isLoading = false
+                            return
+                        }
                         // If there's an additional action (like opening a URL), open it in the specific app
                         if let action = action, let url = URL(string: action) {
                             await openURLInSpecificApp(url: url, appName: appName)
                         }
-                        
-                        // Show success message
                         let actionDescription = action != nil ? " and navigated to \(action!)" : ""
                         response = LocalizedStringKey("✅ Launched \(appName)\(actionDescription)")
                         responseText = "✅ Launched \(appName)\(actionDescription)"
-                        
                     } else {
                         response = LocalizedStringKey("❌ Could not find \(appName). Please make sure it's installed.")
                         responseText = "❌ Could not find \(appName). Please make sure it's installed."
+                        isLoading = false
+                        return
                     }
                 } else {
                     response = LocalizedStringKey("❌ Could not identify which app to launch from: \(originalRequest)")
                     responseText = "❌ Could not identify which app to launch from: \(originalRequest)"
+                    isLoading = false
+                    return
                 }
-                
-                // Clear search and hide window
                 searchText = ""
                 DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
                     if let windowManager = NSApp.delegate as? WindowManager {
                         windowManager.hideWindow()
                     }
                 }
-                
             } catch {
                 response = LocalizedStringKey("❌ Failed to launch app: \(error.localizedDescription)")
                 responseText = "❌ Failed to launch app: \(error.localizedDescription)"
             }
-            
             isLoading = false
         }
     }
@@ -854,6 +1346,7 @@ struct ContentView: View {
             "Keynote": "com.apple.iWork.Keynote",
             "Xcode": "com.apple.dt.Xcode",
             "Visual Studio Code": "com.microsoft.VSCode",
+            "Cursor": "com.todesktop.230313mzl4w4u92",
             "Slack": "com.tinyspeck.slackmacgap",
             "Discord": "com.hnc.Discord",
             "Spotify": "com.spotify.client",
@@ -888,23 +1381,18 @@ struct ContentView: View {
     
     private func openURLInSpecificApp(url: URL, appName: String) async {
         let bundleId = getBundleId(for: appName)
-        
-        // Configure to open URL in specific app
         let config = NSWorkspace.OpenConfiguration()
         config.activates = true
-        
         do {
-            // Try to open URL with specific app bundle ID
-            if !bundleId.isEmpty, 
-               let appURL = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleId) {
+            if !bundleId.isEmpty, let appURL = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleId) {
                 try await NSWorkspace.shared.open([url], withApplicationAt: appURL, configuration: config)
             } else {
-                // Fallback: Use AppleScript to ensure URL opens in specific browser
                 await openURLWithAppleScript(url: url.absoluteString, appName: appName)
             }
         } catch {
             print("Failed to open URL in \(appName): \(error)")
-            // Final fallback: try to open URL in the specific app using AppleScript
+            response = LocalizedStringKey("❌ Failed to open URL in \(appName): \(error.localizedDescription)")
+            responseText = "❌ Failed to open URL in \(appName): \(error.localizedDescription)"
             await openURLWithAppleScript(url: url.absoluteString, appName: appName)
         }
     }
@@ -912,55 +1400,54 @@ struct ContentView: View {
     private func openURLWithAppleScript(url: String, appName: String) async {
         let escapedURL = url.replacingOccurrences(of: "\"", with: "\\\"")
         let escapedAppName = appName.replacingOccurrences(of: "\"", with: "\\\"")
-        
         let script: String
-        
-        // Different approaches for different browsers
         switch appName.lowercased() {
         case let app where app.contains("safari"):
             script = """
-                         tell application "Safari"
-                 activate
-                 delay 0.3
-                 open location "\(escapedURL)"
-             end tell
+                tell application \"Safari\"
+                    activate
+                    delay 0.3
+                    open location \"\(escapedURL)\"
+                end tell
             """
-            
         case let app where app.contains("chrome"):
             script = """
-                         tell application "Google Chrome"
-                 activate
-                 delay 0.3
-                 open location "\(escapedURL)"
-             end tell
+                tell application \"Google Chrome\"
+                    activate
+                    delay 0.3
+                    open location \"\(escapedURL)\"
+                end tell
             """
-            
         case let app where app.contains("firefox"):
             script = """
-                         tell application "Firefox"
-                 activate
-                 delay 0.3
-                 open location "\(escapedURL)"
-             end tell
+                tell application \"Firefox\"
+                    activate
+                    delay 0.3
+                    open location \"\(escapedURL)\"
+                end tell
             """
-            
         default:
             script = """
-                         tell application "\(escapedAppName)"
-                 activate
-                 delay 0.3
-                 open location "\(escapedURL)"
-             end tell
+                tell application \"\(escapedAppName)\"
+                    activate
+                    delay 0.3
+                    open location \"\(escapedURL)\"
+                end tell
             """
         }
-        
-        var error: NSDictionary?
-        if let scriptObject = NSAppleScript(source: script) {
-            scriptObject.executeAndReturnError(&error)
-            if let error = error {
-                print("❌ AppleScript error opening URL: \(error)")
-            } else {
-                print("✅ Successfully opened \(url) in \(appName)")
+        DispatchQueue.global(qos: .userInitiated).async {
+            var error: NSDictionary?
+            if let scriptObject = NSAppleScript(source: script) {
+                scriptObject.executeAndReturnError(&error)
+                DispatchQueue.main.async {
+                    if let error = error {
+                        print("❌ AppleScript error opening URL: \(error)")
+                        response = LocalizedStringKey("❌ AppleScript error opening URL: \(error)")
+                        responseText = "❌ AppleScript error opening URL: \(error)"
+                    } else {
+                        print("✅ Successfully opened \(url) in \(appName)")
+                    }
+                }
             }
         }
     }
@@ -991,6 +1478,8 @@ struct ContentView: View {
             return "hammer"
         case let app where app.contains("vs code") || app.contains("visual studio"):
             return "chevron.left.forwardslash.chevron.right"
+        case let app where app.contains("cursor"):
+            return "curlybraces.square"
         case let app where app.contains("slack"):
             return "message.circle"
         case let app where app.contains("discord"):
@@ -1038,6 +1527,8 @@ struct ContentView: View {
             return [Color.indigo, Color.purple]
         case let app where app.contains("vs code") || app.contains("visual studio"):
             return [Color.blue, Color.purple]
+        case let app where app.contains("cursor"):
+            return [Color.cyan, Color.blue]
         case let app where app.contains("slack"):
             return [Color.purple, Color.pink]
         case let app where app.contains("discord"):

@@ -53,18 +53,8 @@ struct CategorySection: View {
     }
     
     private func colorForCategory(_ category: SearchResultCategory) -> Color {
-        switch category.color {
-        case "blue": return .blue
-        case "green": return .green
-        case "red": return .red
-        case "purple": return .purple
-        case "orange": return .orange
-        case "pink": return .pink
-        case "cyan": return .cyan
-        case "brown": return .brown
-        case "gray": return .gray
-        default: return .secondary
-        }
+        // Since we only have applications now, always return blue
+        return .blue
     }
 }
 
@@ -217,23 +207,6 @@ struct LoadingSearchView: View {
                     )
                 ],
                 totalCount: 5
-            ),
-            CategoryResults(
-                category: .documents,
-                results: [
-                    UniversalSearchResult(
-                        name: "Document.pdf",
-                        path: "/Users/user/Documents/Document.pdf",
-                        category: .pdfs,
-                        icon: NSWorkspace.shared.icon(forFile: "/Users/user/Documents/Document.pdf"),
-                        size: "2.3 MB",
-                        modifiedDate: Date(),
-                        type: "PDF",
-                        bundleIdentifier: nil,
-                        relevanceScore: 80.0
-                    )
-                ],
-                totalCount: 12
             )
         ],
         onResultSelected: { _ in }

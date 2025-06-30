@@ -104,7 +104,23 @@ class WindowManager: NSObject, ObservableObject, NSWindowDelegate {
         setupGlobalHotkey()
         setupBackgroundOperation()
         
+        // Request permissions on startup
+        Task { @MainActor in
+            await requestPermissionsOnStartup()
+        }
+        
         // Start hidden - only show when hotkey is pressed
+    }
+    
+    @MainActor
+    private func requestPermissionsOnStartup() async {
+        print("🚀 Requesting permissions on app startup...")
+        
+        // Create automation manager instance to request permissions
+        let automationManager = AppAutomationManager()
+        await automationManager.requestAllPermissions()
+        
+        print("✅ Startup permission request completed")
     }
     
     deinit {
@@ -129,6 +145,7 @@ class WindowManager: NSObject, ObservableObject, NSWindowDelegate {
         menu.addItem(NSMenuItem.separator())
 
         menu.addItem(NSMenuItem(title: "Setup Global Hotkey...", action: #selector(showHotkeyInstructions), keyEquivalent: ""))
+        menu.addItem(NSMenuItem(title: "Request Permissions...", action: #selector(requestPermissions), keyEquivalent: ""))
         menu.addItem(NSMenuItem.separator())
         menu.addItem(NSMenuItem(title: "Quit Searchfast", action: #selector(quitApp), keyEquivalent: "q"))
         
@@ -145,6 +162,32 @@ class WindowManager: NSObject, ObservableObject, NSWindowDelegate {
     @objc func showHotkeyInstructions() {
         // Post notification to show instructions
         NotificationCenter.default.post(name: NSNotification.Name("ShowHotkeyInstructions"), object: nil)
+    }
+    
+    @objc func requestPermissions() {
+        Task { @MainActor in
+            print("🔐 Manually requesting permissions...")
+            let automationManager = AppAutomationManager()
+            await automationManager.requestAllPermissions()
+            
+            // Check permissions and show alert
+            let result = await automationManager.checkAllPermissions()
+            let message = """
+            Permission Status:
+            
+            Accessibility: \(result.accessibility ? "✅ Granted" : "❌ Not Granted")
+            Automation: \(result.automation ? "✅ Granted" : "❌ Not Granted")
+            
+            \(result.accessibility && result.automation ? "All permissions granted! Microsoft Word automation should now work." : "Some permissions are missing. Please check System Preferences > Privacy & Security.")
+            """
+            
+            let alert = NSAlert()
+            alert.messageText = "Permission Status"
+            alert.informativeText = message
+            alert.alertStyle = .informational
+            alert.addButton(withTitle: "OK")
+            alert.runModal()
+        }
     }
     
     @objc func quitApp() {

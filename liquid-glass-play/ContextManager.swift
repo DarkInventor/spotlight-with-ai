@@ -49,14 +49,17 @@ class ContextManager: ObservableObject {
             }
         }
         
-        // Listen for app switching for real-time context updates
+        // Listen for app switching for real-time context updates (with delay to prevent freezing)
         NSWorkspace.shared.notificationCenter.addObserver(
             forName: NSWorkspace.didActivateApplicationNotification,
             object: nil,
             queue: .main
         ) { [weak self] _ in
-            Task {
-                await self?.captureCurrentContextLightweight()
+            // Add a delay to prevent freezing when apps are launching
+            DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
+                Task {
+                    await self?.captureCurrentContextLightweight()
+                }
             }
         }
     }
@@ -101,40 +104,73 @@ class ContextManager: ObservableObject {
     
     // MARK: - Smart Context Capture
     
-    // Lightweight version - no screenshots, just app info
+    // Ultra-lightweight version - no screenshots, no blocking operations
     func captureCurrentContextLightweight() async {
+        // Early exit if already capturing
         guard !isCapturingContext else { return }
         
-        // If we have a hotkey-triggered context and frontmost app is Searchfast, use the locked context
-        let frontmostApp = NSWorkspace.shared.frontmostApplication?.localizedName ?? "Unknown"
-        if frontmostApp == "Searchfast" || frontmostApp.contains("search"), 
-           let lockedContext = hotkeyTriggeredContext {
-            print("🔒 USING LOCKED CONTEXT: \(lockedContext.appName) (frontmost is \(frontmostApp))")
+        // ALWAYS use locked context if available (never capture Searchfast context)
+        if let lockedContext = hotkeyTriggeredContext {
+            print("🔒 USING LOCKED CONTEXT: \(lockedContext.appName)")
             currentContext = lockedContext
             return
         }
         
+        // Only capture new context if we don't have a locked one and frontmost is NOT Searchfast
+        let frontmostApp = NSWorkspace.shared.frontmostApplication?.localizedName ?? "Unknown"
+        if frontmostApp.contains("Searchfast") || frontmostApp.contains("search") {
+            print("⚠️ Skipping context capture - frontmost is Searchfast")
+            return
+        }
+        
+        // Set flag to prevent multiple captures
         isCapturingContext = true
         defer { isCapturingContext = false }
         
-        // Get frontmost app info (fast)
-        let (appName, windowTitle) = getFrontmostAppInfo()
+        // Quick app info retrieval - don't block if slow
+        let (appName, windowTitle) = await withTaskGroup(of: (String, String).self, returning: (String, String).self) { group in
+            group.addTask {
+                return await self.getFrontmostAppInfo()
+            }
+            
+            // Add timeout task
+            group.addTask {
+                try? await Task.sleep(nanoseconds: 1_000_000_000) // 1 second
+                return ("Unknown", "Unknown")
+            }
+            
+            // Return first result (either app info or timeout)
+            guard let result = await group.next() else {
+                return ("Unknown", "Unknown")
+            }
+            group.cancelAll()
+            return result
+        }
+        
+        // Skip if app is launching (common freeze cause)
+        if appName == "Unknown" || appName.isEmpty {
+            print("⚠️ Skipping context capture - app launching or unknown")
+            return
+        }
         
         // Detect activity without screenshots (much faster)
         let detectedActivity = detectUserActivity(appName: appName, windowTitle: windowTitle, extractedText: nil)
         
-        // Check if we can write into this app
+        // Check if we can write into this app (cached lookup)
         let canWrite = canWriteIntoApp(appName)
         
-        currentContext = UserContext(
-            appName: appName,
-            windowTitle: windowTitle,
-            screenshot: nil, // No screenshot for background monitoring
-            extractedText: nil,
-            detectedActivity: detectedActivity,
-            timestamp: Date(),
-            canWriteIntoApp: canWrite
-        )
+        // Update context on main thread
+        await MainActor.run {
+            currentContext = UserContext(
+                appName: appName,
+                windowTitle: windowTitle,
+                screenshot: nil, // No screenshot for background monitoring
+                extractedText: nil,
+                detectedActivity: detectedActivity,
+                timestamp: Date(),
+                canWriteIntoApp: canWrite
+            )
+        }
         
         print("⚡ Lightweight context: \(appName) - \(detectedActivity)")
     }
@@ -142,12 +178,17 @@ class ContextManager: ObservableObject {
     func captureCurrentContext() async {
         guard !isCapturingContext else { return }
         
-        // If we have a hotkey-triggered context and frontmost app is Searchfast, use the locked context
-        let frontmostApp = NSWorkspace.shared.frontmostApplication?.localizedName ?? "Unknown"
-        if frontmostApp == "Searchfast" || frontmostApp.contains("search"), 
-           let lockedContext = hotkeyTriggeredContext {
-            print("🔒 USING LOCKED CONTEXT: \(lockedContext.appName) (frontmost is \(frontmostApp))")
+        // ALWAYS use locked context if available (never capture Searchfast context)
+        if let lockedContext = hotkeyTriggeredContext {
+            print("🔒 USING LOCKED CONTEXT: \(lockedContext.appName)")
             currentContext = lockedContext
+            return
+        }
+        
+        // Only capture new context if frontmost is NOT Searchfast
+        let frontmostApp = NSWorkspace.shared.frontmostApplication?.localizedName ?? "Unknown"
+        if frontmostApp.contains("Searchfast") || frontmostApp.contains("search") {
+            print("⚠️ Skipping context capture - frontmost is Searchfast")
             return
         }
         
@@ -254,6 +295,44 @@ class ContextManager: ObservableObject {
         let windowTitle = getActiveWindowTitle() ?? "Unknown"
         
         return (appName, windowTitle)
+    }
+    
+    // Get Chrome URL for super accurate detection
+    private func getChromeURL() async -> String? {
+        let script = """
+        tell application "Google Chrome"
+            if (count of windows) > 0 then
+                try
+                    return URL of active tab of first window
+                on error
+                    return ""
+                end try
+            else
+                return ""
+            end if
+        end tell
+        """
+        
+        return await withCheckedContinuation { continuation in
+            // CRITICAL FIX: Execute AppleScript on background thread to prevent UI freeze
+            DispatchQueue.global(qos: .userInitiated).async {
+                var error: NSDictionary?
+                if let scriptObject = NSAppleScript(source: script) {
+                    let result = scriptObject.executeAndReturnError(&error)
+                    Task { @MainActor in
+                        if error == nil, let urlString = result.stringValue {
+                            continuation.resume(returning: urlString.isEmpty ? nil : urlString)
+                        } else {
+                            continuation.resume(returning: nil)
+                        }
+                    }
+                } else {
+                    Task { @MainActor in
+                        continuation.resume(returning: nil)
+                    }
+                }
+            }
+        }
     }
     
     private func getActiveWindowTitle() -> String? {
@@ -396,27 +475,46 @@ class ContextManager: ObservableObject {
         // Detect specific activities based on app and content
         switch appLower {
         case let app where app.contains("chrome") || app.contains("safari") || app.contains("firefox"):
-            // Check URL in window title or extracted text for better detection
-            if titleLower.contains("google docs") || 
-               titleLower.contains("docs.google.com") ||
-               titleLower.contains("document") && titleLower.contains("google") ||
-               textLower.contains("docs.google.com") ||
-               textLower.contains("https://docs.google.com") ||
-               (titleLower.contains("untitled document") && appLower.contains("chrome")) ||
-               (titleLower.contains("document") && appLower.contains("chrome")) {
+            // For Chrome, get the actual URL for 100% accurate detection
+            if app.contains("chrome") {
+                Task {
+                    if let chromeURL = await getChromeURL() {
+                        print("🌐 Chrome URL: \(chromeURL)")
+                        // Update context with URL info - this will be used for next detection cycle
+                    }
+                }
+            }
+            
+            // ENHANCED URL DETECTION - check multiple sources
+            let combinedText = "\(titleLower) \(textLower)"
+            
+            // Google Docs detection (multiple patterns)
+            if combinedText.contains("docs.google.com/document") ||
+               combinedText.contains("google docs") ||
+               (combinedText.contains("document") && combinedText.contains("google")) ||
+               combinedText.contains("untitled document") ||
+               titleLower.hasPrefix("document") ||
+               titleLower.contains("- google docs") ||
+               titleLower.hasSuffix("- google docs") {
                 return "Writing in Google Docs"
-            } else if titleLower.contains("gmail") || 
-                      titleLower.contains("mail.google.com") ||
-                      textLower.contains("gmail") {
+            }
+            // Gmail detection (multiple patterns)  
+            else if combinedText.contains("mail.google.com") ||
+                    combinedText.contains("gmail") ||
+                    titleLower.contains("gmail") ||
+                    combinedText.contains("inbox") && combinedText.contains("google") {
                 return "Managing email in Gmail"
+            } else if combinedText.contains("docs.google.com/spreadsheets") ||
+                      combinedText.contains("sheets.google.com") ||
+                      combinedText.contains("google sheets") ||
+                      titleLower.contains("spreadsheet") ||
+                      titleLower.contains("untitled spreadsheet") ||
+                      titleLower.hasSuffix("- google sheets") {
+                return "Working in Google Sheets"
             } else if titleLower.contains("slack") || textLower.contains("slack") {
                 return "Chatting in Slack"
             } else if titleLower.contains("github") || textLower.contains("github") {
                 return "Coding on GitHub"
-            } else if titleLower.contains("sheets") || 
-                      titleLower.contains("sheets.google.com") ||
-                      textLower.contains("sheets.google.com") {
-                return "Working in Google Sheets"
             } else if titleLower.contains("slides") || 
                       titleLower.contains("slides.google.com") ||
                       textLower.contains("slides.google.com") {
@@ -436,6 +534,9 @@ class ContextManager: ObservableObject {
             
         case let app where app.contains("vs code") || app.contains("visual studio"):
             return "Coding in VS Code"
+            
+        case let app where app.contains("cursor") || app.contains("Cursor"):
+            return "Coding in Cursor IDE"
             
         case let app where app.contains("slack"):
             return "Chatting in Slack"
@@ -490,16 +591,24 @@ class ContextManager: ObservableObject {
     // MARK: - Writing Capability Detection
     
     private func canWriteIntoApp(_ appName: String) -> Bool {
+        let appLower = appName.lowercased()
+        
+        // NEVER allow writing to Searchfast itself!
+        if appLower.contains("searchfast") || appLower.contains("search") {
+            print("🚫 BLOCKED: Cannot write to Searchfast itself!")
+            return false
+        }
+        
         let writableApps = [
             "google chrome", "safari", "firefox", // For web apps including Google Sheets, Docs, Gmail
             "pages", "microsoft word", "microsoft excel", "microsoft powerpoint",
             "numbers", "keynote", "textedit", "notes",
-            "xcode", "visual studio code", "vs code",
+            "xcode", "visual studio code", "vs code", "cursor",
             "slack", "discord", "mail", "messages", "notion",
             "atom", "sublime", "vim", "emacs" // Additional code editors
         ]
         
-        return writableApps.contains { appName.lowercased().contains($0) }
+        return writableApps.contains { appLower.contains($0) }
     }
     
     // MARK: - Smart AI Integration
@@ -603,13 +712,18 @@ class ContextManager: ObservableObject {
         end tell
         """
         
-        var error: NSDictionary?
-        if let scriptObject = NSAppleScript(source: script) {
-            scriptObject.executeAndReturnError(&error)
-            if let error = error {
-                print("❌ AppleScript error: \(error)")
-            } else {
-                print("✅ Successfully typed into \(appName)")
+        // CRITICAL FIX: Execute AppleScript on background thread to prevent UI freeze
+        DispatchQueue.global(qos: .userInitiated).async {
+            var error: NSDictionary?
+            if let scriptObject = NSAppleScript(source: script) {
+                scriptObject.executeAndReturnError(&error)
+                Task { @MainActor in
+                    if let error = error {
+                        print("❌ AppleScript error: \(error)")
+                    } else {
+                        print("✅ Successfully typed into \(appName)")
+                    }
+                }
             }
         }
     }

@@ -177,6 +177,7 @@ struct SearchBar: View {
     @Binding var text: String
     var onSubmit: (() -> Void)? = nil
     var onImageDrop: ((NSImage) -> Void)? = nil
+    var contextManager: ContextManager? = nil
     @FocusState private var isFieldFocused: Bool
     @Environment(\.colorScheme) private var colorScheme
     @State private var isDragOver = false
@@ -186,9 +187,9 @@ struct SearchBar: View {
     var body: some View {
         if #available(macOS 26.0, *) {
             HStack(spacing: 14) {
-                Image(systemName: "magnifyingglass")
+                getCurrentAppIconView()
                     .foregroundColor(Color(NSColor.tertiaryLabelColor))
-                    .font(.system(size: 18, weight: .medium))
+                    .font(.system(size: 28, weight: .medium))
                 
                 FocusableTextField(
                     text: $text,
@@ -207,7 +208,7 @@ struct SearchBar: View {
                 }) {
                     Image(systemName: "paperclip")
                         .foregroundColor(Color(NSColor.tertiaryLabelColor))
-                        .font(.system(size: 14, weight: .medium))
+                        .font(.system(size: 18, weight: .medium))
                 }
                 .buttonStyle(.plain)
                 .help("Attach image")
@@ -255,6 +256,112 @@ struct SearchBar: View {
         } else {
             // Fallback on earlier versions
         }
+    }
+    
+    @ViewBuilder
+    private func getCurrentAppIconView() -> some View {
+        if let contextManager = contextManager,
+           let context = contextManager.currentContext,
+           let appIcon = getCurrentAppIcon(for: context.appName) {
+            Image(nsImage: appIcon)
+                .resizable()
+                .aspectRatio(contentMode: .fit)
+                .frame(width: 28, height: 28)
+        } else {
+            Image(systemName: "magnifyingglass")
+                .font(.system(size: 18, weight: .medium))
+        }
+    }
+    
+    private func getCurrentAppIcon(for appName: String) -> NSImage? {
+        if appName.lowercased().contains("searchfast") || 
+           appName.lowercased().contains("search") ||
+           appName == "Unknown" {
+            return nil
+        }
+        
+        if let bundleId = getBundleIdForAppName(appName) {
+            if let appURL = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleId) {
+                return NSWorkspace.shared.icon(forFile: appURL.path)
+            }
+        }
+        
+        let appPaths = [
+            "/Applications/\(appName).app",
+            "/System/Applications/\(appName).app"
+        ]
+        
+        for appPath in appPaths {
+            if FileManager.default.fileExists(atPath: appPath) {
+                return NSWorkspace.shared.icon(forFile: appPath)
+            }
+        }
+        
+        return findAppIconByPartialName(appName)
+    }
+    
+    private func getBundleIdForAppName(_ appName: String) -> String? {
+        let bundleIds: [String: String] = [
+            "Safari": "com.apple.Safari",
+            "Google Chrome": "com.google.Chrome",
+            "Firefox": "org.mozilla.firefox",
+            "Microsoft Word": "com.microsoft.Word",
+            "Microsoft Excel": "com.microsoft.Excel",
+            "Microsoft PowerPoint": "com.microsoft.PowerPoint",
+            "Pages": "com.apple.iWork.Pages",
+            "Numbers": "com.apple.iWork.Numbers",
+            "Keynote": "com.apple.iWork.Keynote",
+            "Xcode": "com.apple.dt.Xcode",
+            "Visual Studio Code": "com.microsoft.VSCode",
+            "Cursor": "com.todesktop.230313mzl4w4u92",
+            "Slack": "com.tinyspeck.slackmacgap",
+            "Discord": "com.hnc.Discord",
+            "Spotify": "com.spotify.client",
+            "Finder": "com.apple.finder",
+            "Mail": "com.apple.mail",
+            "Messages": "com.apple.MobileSMS",
+            "FaceTime": "com.apple.FaceTime",
+            "Zoom": "us.zoom.xos",
+            "Microsoft Teams": "com.microsoft.teams",
+            "TextEdit": "com.apple.TextEdit",
+            "Notes": "com.apple.Notes",
+            "Notion": "notion.id"
+        ]
+        
+        if let bundleId = bundleIds[appName] {
+            return bundleId
+        }
+        
+        let appNameLower = appName.lowercased()
+        for (name, bundleId) in bundleIds {
+            if name.lowercased().contains(appNameLower) || 
+               appNameLower.contains(name.lowercased()) {
+                return bundleId
+            }
+        }
+        
+        return nil
+    }
+    
+    private func findAppIconByPartialName(_ appName: String) -> NSImage? {
+        let appNameLower = appName.lowercased()
+        let searchPaths = ["/Applications", "/System/Applications"]
+        
+        for searchPath in searchPaths {
+            do {
+                let contents = try FileManager.default.contentsOfDirectory(atPath: searchPath)
+                for item in contents {
+                    if item.lowercased().contains(appNameLower) && item.hasSuffix(".app") {
+                        let fullPath = "\(searchPath)/\(item)"
+                        return NSWorkspace.shared.icon(forFile: fullPath)
+                    }
+                }
+            } catch {
+                continue
+            }
+        }
+        
+        return nil
     }
     
     private func handleDrop(providers: [NSItemProvider]) -> Bool {
@@ -348,7 +455,7 @@ struct SearchBar: View {
 }
 
 #Preview {
-    SearchBar(text: .constant(""))
+    SearchBar(text: .constant(""), contextManager: nil)
         .padding()
 } 
 
