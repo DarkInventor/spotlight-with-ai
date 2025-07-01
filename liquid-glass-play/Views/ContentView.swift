@@ -4,26 +4,51 @@ import GoogleGenerativeAI
 import SwiftfulLoadingIndicators
 import ScreenCaptureKit
 import CoreMedia
+import AppKit
 
 struct ContentView: View {
     @State private var searchText: String = ""
     @State private var response: LocalizedStringKey = "How can I help you today?"
     @State private var responseText: String = "How can I help you today?"
+    @State private var showingProactiveGreeting = false
     @State private var isLoading = false
     @State private var isCopied = false
     @State private var selectedImage: NSImage? = nil
+    @State private var autoScreenshot: NSImage? = nil
+    @State private var showingActionButtons = false
+    @State private var pendingActions: [ResponseAction] = []
     @StateObject private var memoryManager = MemoryManager()
     @StateObject private var universalSearchManager = UniversalSearchManager()
     @StateObject private var contextManager = ContextManager()
     @StateObject private var automationManager = AppAutomationManager()
+    @StateObject private var screenshotManager = ScreenshotManager() // NEW: Dedicated screenshot manager
+    @StateObject private var appSearchManager = AppSearchManager() // NEW: For app launching
     @State private var showingHotkeyInstructions = false
     @State private var showingUniversalResults = false
     @State private var isCapturingScreenshot = false
     @State private var shouldWriteToApp = false
     @Environment(\.colorScheme) private var colorScheme
+    
+    // NEW: Response actions structure
+    struct ResponseAction: Identifiable, Hashable {
+        let id = UUID()
+        let title: String
+        let description: String
+        let actionType: ActionType
+        let payload: String
+        
+        enum ActionType {
+            case writeToApp
+            case openApp
+            case executeScript
+            case copyText
+            case searchWeb
+        }
+    }
+    
     // Before running, please ensure you have added the GoogleGenerativeAI package.
     // In Xcode: File > Add Package Dependencies... > https://github.com/google/generative-ai-swift
-    private let model = GenerativeModel(name: "gemini-2.5-flash", apiKey: APIKey.default)
+    private let model = GenerativeModel(name: "gemini-1.5-flash", apiKey: APIKey.default)
 
     var body: some View {
         VStack(spacing: 16) {
@@ -71,9 +96,10 @@ struct ContentView: View {
                 }
                 .padding(.horizontal, 20)
                 
-                if let selectedImage = selectedImage {
-                    HStack {
-                        // Very small attachment indicator
+                // Show attachment indicators
+                HStack(spacing: 8) {
+                    // Manual screenshot attachment
+                    if let selectedImage = selectedImage {
                         HStack(spacing: 4) {
                             Image(systemName: "paperclip")
                                 .font(.system(size: 10))
@@ -85,13 +111,15 @@ struct ContentView: View {
                                 .frame(width: 16, height: 16)
                                 .cornerRadius(3)
                                 .clipped()
+                            
+                            Text("Manual")
+                                .font(.system(size: 8))
+                                .foregroundColor(.secondary)
                         }
                         .padding(.horizontal, 8)
                         .padding(.vertical, 4)
-                        .background(Color.gray.opacity(0.1))
+                        .background(Color.blue.opacity(0.1))
                         .cornerRadius(8)
-                        
-                        Spacer()
                         
                         Button(action: {
                             withAnimation {
@@ -104,9 +132,47 @@ struct ContentView: View {
                         }
                         .buttonStyle(PlainButtonStyle())
                     }
-                    .padding(.horizontal, 20)
-                    .padding(.vertical, 2)
+                    
+                    // Auto-screenshot indicator
+                    if let autoScreenshot = autoScreenshot {
+                        HStack(spacing: 4) {
+                            Image(systemName: "camera.fill")
+                                .font(.system(size: 10))
+                                .foregroundColor(.green)
+                            
+                            Image(nsImage: autoScreenshot)
+                                .resizable()
+                                .aspectRatio(contentMode: .fill)
+                                .frame(width: 16, height: 16)
+                                .cornerRadius(3)
+                                .clipped()
+                            
+                            Text("Auto-captured")
+                                .font(.system(size: 8))
+                                .foregroundColor(.green)
+                        }
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .background(Color.green.opacity(0.1))
+                        .cornerRadius(8)
+                        
+                        Button(action: {
+                            withAnimation {
+                                self.autoScreenshot = nil
+                            }
+                        }) {
+                            Image(systemName: "xmark.circle.fill")
+                                .font(.system(size: 12))
+                                .foregroundColor(.gray.opacity(0.6))
+                        }
+                        .buttonStyle(PlainButtonStyle())
+                    }
+                    
+                    Spacer()
                 }
+                .padding(.horizontal, 20)
+                .padding(.vertical, 2)
+                .opacity((selectedImage != nil || autoScreenshot != nil) ? 1 : 0)
             }
 
             ZStack {
@@ -281,6 +347,60 @@ struct ContentView: View {
                                 .transition(.scale.combined(with: .opacity))
                                 .animation(.spring(response: 0.4, dampingFraction: 0.8), value: shouldWriteToApp)
                             }
+                            
+                            // 🚀 NEW: Smart Action Buttons - Cursor-inspired interaction flow
+                            if showingActionButtons && !pendingActions.isEmpty {
+                                VStack(spacing: 8) {
+                                    Text("💡 Suggested Actions")
+                                        .font(.system(size: 12, weight: .medium))
+                                        .foregroundColor(.secondary)
+                                    
+                                    ForEach(pendingActions, id: \.id) { action in
+                                        Button(action: {
+                                            executeAction(action)
+                                        }) {
+                                            HStack {
+                                                Image(systemName: getActionIcon(for: action.actionType))
+                                                    .font(.system(size: 14, weight: .medium))
+                                                
+                                                VStack(alignment: .leading, spacing: 2) {
+                                                    Text(action.title)
+                                                        .font(.system(size: 14, weight: .medium))
+                                                    
+                                                    if !action.description.isEmpty {
+                                                        Text(action.description)
+                                                            .font(.system(size: 12))
+                                                            .foregroundColor(.secondary)
+                                                    }
+                                                }
+                                                
+                                                Spacer()
+                                                
+                                                Image(systemName: "arrow.right.circle.fill")
+                                                    .font(.system(size: 16))
+                                                    .foregroundColor(.blue)
+                                            }
+                                            .foregroundColor(.primary)
+                                            .padding(.horizontal, 16)
+                                            .padding(.vertical, 12)
+                                            .background(Color.gray.opacity(0.1))
+                                            .cornerRadius(12)
+                                            .overlay(
+                                                RoundedRectangle(cornerRadius: 12)
+                                                    .stroke(Color.blue.opacity(0.3), lineWidth: 1)
+                                            )
+                                        }
+                                        .buttonStyle(.plain)
+                                        .onHover { isHovered in
+                                            withAnimation(.easeInOut(duration: 0.2)) {
+                                                // Add hover effect if needed
+                                            }
+                                        }
+                                    }
+                                }
+                                .transition(.move(edge: .bottom).combined(with: .opacity))
+                                .animation(.spring(response: 0.5, dampingFraction: 0.8), value: showingActionButtons)
+                            }
                         }
                         
                         Spacer(minLength: 0)
@@ -320,6 +440,13 @@ struct ContentView: View {
                         await automationManager.captureWordCursorPosition()
                     }
                     
+                    // 🚀 NEW: Automatically capture screenshot for context
+                    print("📸 🚀 AUTO-CAPTURING SCREENSHOT for intelligent context awareness!")
+                    if let screenshot = await screenshotManager.captureForContext() {
+                        autoScreenshot = screenshot
+                        print("✅ 🚀 AUTO-SCREENSHOT SET! Ready for intelligent responses!")
+                    }
+                    
                     await contextManager.captureContextForApp(app)
                     
                     // Force UI update
@@ -337,6 +464,7 @@ struct ContentView: View {
         }
         .onAppear {
             checkAndShowHotkeyInstructions()
+            showProactiveGreeting()
         }
         .alert("Save Conversation History?", isPresented: $memoryManager.showingPermissionAlert) {
             Button("Allow") {
@@ -373,91 +501,27 @@ struct ContentView: View {
     }
 
     private func captureScreenshot() {
-        print("📸 CAPTURING SCREENSHOT - SAVING DOGS & CATS!")
+        print("📸 CAPTURING MANUAL SCREENSHOT - SAVING DOGS & CATS!")
         
         isCapturingScreenshot = true
         
-        // Hide the current window temporarily for clean screenshot
-        if let windowManager = NSApp.delegate as? WindowManager {
-            windowManager.hideWindow()
-        }
-        
-        // Wait a moment for window to hide, then capture
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
-            self.performScreenCapture()
-        }
-    }
-    
-    private func performScreenCapture() {
         Task {
-            do {
-                print("📸 Starting ScreenCaptureKit capture...")
-                
-                // Check if ScreenCaptureKit is available (macOS 12.3+)
-                guard #available(macOS 12.3, *) else {
-                    print("❌ ScreenCaptureKit requires macOS 12.3 or later")
-                    await MainActor.run {
-                        isCapturingScreenshot = false
-                        showWindow()
-                    }
-                    return
-                }
-                
-                // Get all displays and windows
-                let content = try await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: true)
-                
-                guard let display = content.displays.first else {
-                    print("❌ No displays found")
-                    await MainActor.run {
-                        isCapturingScreenshot = false
-                        showWindow()
-                    }
-                    return
-                }
-                
-                // Create configuration for screenshot
-                let config = SCStreamConfiguration()
-                config.width = Int(display.width)
-                config.height = Int(display.height)
-                config.pixelFormat = kCVPixelFormatType_32BGRA
-                config.showsCursor = true
-                
-                // Create filter with the display (exclude our own window)
-                let filter = SCContentFilter(display: display, excludingWindows: [])
-                
-                // Take screenshot using the correct API
-                let cgImage = try await SCScreenshotManager.captureImage(
-                    contentFilter: filter,
-                    configuration: config
-                )
-                
-                // Convert to NSImage
-                let screenshot = NSImage(cgImage: cgImage, size: NSSize(width: cgImage.width, height: cgImage.height))
-                
+            if let screenshot = await screenshotManager.captureManual(hideWindow: true) {
                 await MainActor.run {
-                    // Set the captured image
                     withAnimation {
                         self.selectedImage = screenshot
                     }
-                    
                     isCapturingScreenshot = false
-                    
-                    // Show the window again
-                    showWindow()
+                    print("✅ MANUAL SCREENSHOT CAPTURED & ATTACHED! Dogs & Cats SAVED!")
                     
                     // Auto-focus search field for immediate interaction
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
                         NotificationCenter.default.post(name: NSNotification.Name("FocusSearchField"), object: nil)
                     }
-                    
-                    print("✅ SCREENSHOT CAPTURED & ATTACHED! Dogs & Cats SAVED!")
                 }
-                
-            } catch {
-                print("❌ Screenshot failed: \(error)")
+            } else {
                 await MainActor.run {
                     isCapturingScreenshot = false
-                    showWindow()
                     
                     // Show error to user
                     let alert = NSAlert()
@@ -476,15 +540,9 @@ struct ContentView: View {
             }
         }
     }
-    
-    private func showWindow() {
-        if let windowManager = NSApp.delegate as? WindowManager {
-            windowManager.forceShowWindow()
-        }
-    }
 
     private func generateResponse() {
-        guard !searchText.isEmpty || selectedImage != nil else { return }
+        guard !searchText.isEmpty || selectedImage != nil || autoScreenshot != nil else { return }
         
         // Check if we need to ask for permission first (only once)
         if memoryManager.shouldAskPermission() {
@@ -493,6 +551,10 @@ struct ContentView: View {
         }
         
         let userInput = searchText
+        
+        // Reset action buttons state
+        showingActionButtons = false
+        pendingActions = []
         
         // Check if this is an app launch/automation request
         if isAppLaunchRequest(userInput) {
@@ -516,11 +578,15 @@ struct ContentView: View {
                 // Load recent memory for context (reduced from 5 to 3)
                 let memoryContext = memoryManager.loadRecentMemory(limit: 3)
                 
-                // Get contextual prompt that includes what user is currently doing
-                let contextualPrompt = contextManager.getContextualPrompt(for: userInput)
+                // 🚀 ENHANCED: Get contextual prompt with screenshot awareness
+                let hasScreenshotContext = autoScreenshot != nil || selectedImage != nil
+                let contextualPrompt = contextManager.getContextualPrompt(for: userInput, includeScreenshotContext: hasScreenshotContext)
                 let fullPrompt = memoryContext.isEmpty ? contextualPrompt : "\(memoryContext)\n\n\(contextualPrompt)"
                 
-                if let image = selectedImage {
+                // 🖼️ SMART IMAGE HANDLING: Use auto-screenshot if available, otherwise manual screenshot
+                let imageToUse = selectedImage ?? autoScreenshot
+                
+                if let image = imageToUse {
                     // Convert NSImage to Data
                     guard let tiffData = image.tiffRepresentation,
                           let bitmap = NSBitmapImageRep(data: tiffData),
@@ -528,11 +594,18 @@ struct ContentView: View {
                         throw NSError(domain: "ImageConversion", code: 1, userInfo: [NSLocalizedDescriptionKey: "Failed to convert image"])
                     }
                     
-                    let prompt = userInput.isEmpty ? "What do you see in this image?" : fullPrompt
+                    let prompt = userInput.isEmpty ? 
+                        "🚀 I can see your screen! What would you like help with? I can analyze what you're working on and provide specific assistance." : 
+                        fullPrompt
+                    
                     let imagePart = ModelContent.Part.data(mimetype: "image/jpeg", jpegData)
                     result = try await model.generateContent(prompt, imagePart)
+                    
                     withAnimation {
-                        self.selectedImage = nil // Clear image after sending
+                        // Clear manual screenshot after sending, but keep auto-screenshot for this session
+                        if selectedImage != nil {
+                            self.selectedImage = nil
+                        }
                     }
                 } else {
                     result = try await model.generateContent(fullPrompt)
@@ -541,6 +614,9 @@ struct ContentView: View {
                 let resultText = result.text ?? "No response found"
                 response = LocalizedStringKey(resultText)
                 responseText = resultText
+                
+                // 🚀 NEW: Parse response for smart action buttons (Cursor-inspired)
+                parseResponseForActions(resultText)
                 
                 // 🎯 SMART BUTTON DETECTION - Always show button for supported apps!
                 // Don't rely on keywords - if we can write to the app, show the button!
@@ -619,10 +695,132 @@ struct ContentView: View {
         UserDefaults.standard.set(true, forKey: "hotkeyInstructionsShown")
     }
     
+    // 🚀 NEW: Proactive intelligent greeting based on context
+    private func showProactiveGreeting() {
+        // Only show if we have context and auto-screenshot
+        guard let context = contextManager.currentContext,
+              autoScreenshot != nil,
+              !context.appName.lowercased().contains("searchfast") else {
+            return
+        }
+        
+        let proactiveGreeting = generateProactiveGreeting(for: context)
+        
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+            withAnimation {
+                self.response = LocalizedStringKey(proactiveGreeting)
+                self.responseText = proactiveGreeting
+                self.showingProactiveGreeting = true
+                
+                // Parse for suggested actions immediately
+                self.parseResponseForActions(proactiveGreeting)
+            }
+        }
+    }
+    
+    private func generateProactiveGreeting(for context: ContextManager.UserContext) -> String {
+        let appName = context.appName
+        let activity = context.detectedActivity
+        
+        // Generate context-aware suggestions
+        switch appName.lowercased() {
+        case let app where app.contains("adobe") && app.contains("illustrator"):
+            return """
+            🎨 I can see you're working in Adobe Illustrator! Here are some things I can help with:
+            
+            • Explain design techniques and effects
+            • Help with vector artwork creation
+            • Suggest color schemes and typography
+            • Guide you through complex tool usage
+            • Answer questions about what's currently on your screen
+            
+            What would you like to work on?
+            """
+            
+        case let app where app.contains("adobe") && app.contains("photoshop"):
+            return """
+            📸 Working in Photoshop! I can help you with:
+            
+            • Photo editing techniques and effects
+            • Layer management and blending modes
+            • Color correction and retouching
+            • Creating custom brushes and actions
+            • Analyzing your current composition
+            
+            What's your creative goal today?
+            """
+            
+        case let app where app.contains("figma"):
+            return """
+            🎯 I see you're designing in Figma! I can assist with:
+            
+            • UI/UX design best practices
+            • Component and prototype creation
+            • Design system organization
+            • Accessibility considerations
+            • Reviewing your current design
+            
+            How can I enhance your design workflow?
+            """
+            
+        case let app where app.contains("cursor") || app.contains("vs code") || app.contains("xcode"):
+            return """
+            💻 Coding mode detected! I can help you with:
+            
+            • Code review and debugging
+            • Implementation suggestions
+            • Best practices and patterns
+            • Documentation and comments
+            • Analyzing your current code
+            
+            What are you building?
+            """
+            
+        case let app where app.contains("word") || app.contains("pages"):
+            return """
+            📝 Writing in \(appName)! I can help with:
+            
+            • Content editing and improvement
+            • Grammar and style suggestions
+            • Document formatting
+            • Research and fact-checking
+            • Reviewing your current text
+            
+            What's your writing project about?
+            """
+            
+        case let app where app.contains("excel") || app.contains("numbers"):
+            return """
+            📊 Working with spreadsheets! I can assist with:
+            
+            • Formula creation and debugging
+            • Data analysis and visualization
+            • Chart and graph suggestions
+            • Spreadsheet organization
+            • Analyzing your current data
+            
+            What insights are you looking for?
+            """
+            
+        default:
+            return """
+            🚀 I can see you're working in \(appName) and I've captured your screen for context! 
+            
+            I can help with:
+            • Explaining what I see on your screen
+            • Providing app-specific guidance
+            • Suggesting next steps for your work
+            • Automating repetitive tasks
+            
+            What would you like to accomplish?
+            """
+        }
+    }
+    
     // MARK: - Universal Search Methods
     
     private func handleSearch() {
-        print("🚀 ENTER PRESSED - SMART APP DETECTION! Saving cats & dogs!")
+        print("🚀 ENTER PRESSED - CURSOR-INSPIRED INTERACTION! Saving cats & dogs!")
         
         // 🔍 FORCE CONTEXT CAPTURE TO ENSURE WE HAVE THE RIGHT CONTEXT!
         Task {
@@ -645,61 +843,9 @@ struct ContentView: View {
             print("❌ NO CURRENT CONTEXT FOUND!")
         }
         
-        // 🎯 SMART APP DETECTION - Check if current context is any supported app
-        if let context = contextManager.currentContext, context.canWriteIntoApp {
-            let appName = context.appName.lowercased()
-            print("✅ CONTEXT FOUND - PROCEEDING WITH APP-SPECIFIC AUTOMATION for: '\(appName)'")
-            
-            // 📱 MINIMIZE SEARCHFAST IMMEDIATELY for ALL supported apps!
-            print("📱 MINIMIZING SearchFast immediately for \(context.appName)!")
-            if let windowManager = NSApp.delegate as? WindowManager {
-                windowManager.hideWindow()
-            }
-            
-            // Detect supported apps automatically - NO KEYWORDS REQUIRED!
-            if appName.contains("cursor") {
-                print("🎯 CURSOR DETECTED - Auto-code writing mode!")
-                handleCursorAutoWriteMinimized()
-                return
-            } else if appName.contains("microsoft word") || appName.contains("word") {
-                print("📝 MICROSOFT WORD DETECTED - Auto-document writing mode!")
-                handleWordAutoWriteMinimized()
-                return
-            } else if appName.contains("microsoft excel") || appName.contains("excel") {
-                print("📊 EXCEL DETECTED - Auto-spreadsheet writing mode!")
-                handleExcelAutoWriteMinimized()
-                return
-            } else if appName.contains("visual studio code") || appName.contains("vs code") {
-                print("💻 VS CODE DETECTED - Auto-code writing mode!")
-                handleVSCodeAutoWriteMinimized()
-                return
-            } else if appName.contains("xcode") {
-                print("🔨 XCODE DETECTED - Auto-code writing mode!")
-                handleXcodeAutoWriteMinimized()
-                return
-            } else if appName.contains("pages") {
-                print("📄 PAGES DETECTED - Auto-document writing mode!")
-                handlePagesAutoWriteMinimized()
-                return
-            } else if appName.contains("keynote") {
-                print("🎬 KEYNOTE DETECTED - Auto-presentation writing mode!")
-                handleKeynoteAutoWriteMinimized()
-                return
-            } else {
-                print("📝 SUPPORTED APP DETECTED: \(context.appName) - Auto-writing mode!")
-                handleGenericAppAutoWriteMinimized(appName: context.appName)
-                return
-            }
-        } else {
-            print("❌ NO VALID CONTEXT OR APP DOESN'T SUPPORT WRITING")
-            if let context = contextManager.currentContext {
-                print("   - Current app: '\(context.appName)'")
-                print("   - Can write: \(context.canWriteIntoApp)")
-            }
-        }
-        
-        print("🤖 FALLING BACK TO GENERAL AI RESPONSE")
-        // DIRECTLY go to AI chat when Enter is pressed - this is what users expect!
+        // 🚀 NEW CURSOR-INSPIRED FLOW: ALWAYS show response first with action buttons
+        // Never hide the window immediately - let user see the response and choose actions
+        print("🎯 CURSOR-INSPIRED: Showing AI response FIRST with action buttons!")
         generateResponse()
     }
     
@@ -1563,6 +1709,360 @@ struct ContentView: View {
         case .hybrid:
             return "Hybrid (Smart)"
         }
+    }
+    
+    // MARK: - 🚀 NEW: Action Button System (Cursor-inspired)
+    
+    private func getActionIcon(for actionType: ResponseAction.ActionType) -> String {
+        switch actionType {
+        case .writeToApp:
+            return "pencil.and.ellipsis.rectangle"
+        case .openApp:
+            return "app.badge"
+        case .executeScript:
+            return "terminal"
+        case .copyText:
+            return "doc.on.doc"
+        case .searchWeb:
+            return "magnifyingglass"
+        }
+    }
+    
+    private func executeAction(_ action: ResponseAction) {
+        print("🚀 EXECUTING ACTION: \(action.title)")
+        
+        Task { @MainActor in
+            switch action.actionType {
+            case .writeToApp:
+                await executeWriteToAppAction(action.payload)
+                
+            case .openApp:
+                await executeOpenAppAction(action.payload)
+                
+            case .executeScript:
+                await executeScriptAction(action.payload)
+                
+            case .copyText:
+                executeCopyTextAction(action.payload)
+                
+            case .searchWeb:
+                executeSearchWebAction(action.payload)
+            }
+            
+            // Hide action buttons after execution
+            withAnimation {
+                showingActionButtons = false
+                pendingActions = []
+            }
+        }
+    }
+    
+    private func executeWriteToAppAction(_ text: String) async {
+        print("✍️ Writing to app: \(text)")
+        await contextManager.writeIntoCurrentApp(text)
+        
+        // Hide the search window after writing
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+            if let windowManager = NSApp.delegate as? WindowManager {
+                windowManager.hideWindow()
+            }
+        }
+    }
+    
+    private func executeOpenAppAction(_ appName: String) async {
+        print("📱 Opening app: \(appName)")
+        
+        // Use the public searchApps method to find matching apps
+        let matchingApps = await MainActor.run {
+            appSearchManager.searchApps(query: appName)
+        }
+        
+        if let appToLaunch = matchingApps.first {
+            await MainActor.run {
+                appSearchManager.launchApp(appToLaunch)
+                print("✅ Successfully launched \(appToLaunch.name)")
+            }
+        } else {
+            // Fallback to simple NSWorkspace launch
+            do {
+                if let appURL = NSWorkspace.shared.urlForApplication(withBundleIdentifier: getBundleId(for: appName)) ?? findAppByName(appName) {
+                    let config = NSWorkspace.OpenConfiguration()
+                    config.activates = true
+                    try await NSWorkspace.shared.openApplication(at: appURL, configuration: config)
+                    print("✅ Successfully launched \(appName) via fallback")
+                } else {
+                    print("❌ Could not find \(appName)")
+                }
+            } catch {
+                print("❌ Failed to launch \(appName): \(error)")
+            }
+        }
+        
+        // Hide the search window after opening app
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+            if let windowManager = NSApp.delegate as? WindowManager {
+                windowManager.hideWindow()
+            }
+        }
+    }
+    
+    private func executeScriptAction(_ script: String) async {
+        print("⚙️ Executing script: \(script)")
+        // Implement script execution logic here
+        // This could be AppleScript, shell commands, etc.
+    }
+    
+    private func executeCopyTextAction(_ text: String) {
+        print("📋 Copying text: \(text)")
+        let pasteboard = NSPasteboard.general
+        pasteboard.clearContents()
+        pasteboard.setString(text, forType: .string)
+        
+        // Show feedback
+        withAnimation {
+            isCopied = true
+        }
+        
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+            withAnimation {
+                isCopied = false
+            }
+        }
+    }
+    
+    private func executeSearchWebAction(_ urlOrQuery: String) {
+        print("🔍 Searching web: \(urlOrQuery)")
+        
+        var finalURL: URL?
+        
+        // Check if it's already a full URL
+        if urlOrQuery.hasPrefix("http") {
+            finalURL = URL(string: urlOrQuery)
+        } else {
+            // Treat as a search query
+            finalURL = URL(string: "https://www.google.com/search?q=\(urlOrQuery.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? "")")
+        }
+        
+        if let url = finalURL {
+            NSWorkspace.shared.open(url)
+            print("✅ Successfully opened: \(url)")
+        } else {
+            print("❌ Failed to create URL from: \(urlOrQuery)")
+        }
+        
+        // Hide the search window after opening web search
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+            if let windowManager = NSApp.delegate as? WindowManager {
+                windowManager.hideWindow()
+            }
+        }
+    }
+    
+    // 🤖 AI Response Parser - Detect and create action buttons (CURSOR-INSPIRED)
+    private func parseResponseForActions(_ responseText: String) {
+        print("🤖 PARSING RESPONSE FOR ACTIONS...")
+        
+        var actions: [ResponseAction] = []
+        
+        // 🚀 SMART ACTION DETECTION: If we can write to the current app, ALWAYS show a write button
+        if let context = contextManager.currentContext, context.canWriteIntoApp {
+            let appName = context.appName
+            
+            // For code editors, show "Write to Cursor/VS Code/Xcode"
+            if appName.lowercased().contains("cursor") {
+                actions.append(ResponseAction(
+                    title: "Write to Cursor",
+                    description: "Insert code into Cursor IDE",
+                    actionType: .writeToApp,
+                    payload: responseText
+                ))
+            } else if appName.lowercased().contains("visual studio code") || appName.lowercased().contains("vs code") {
+                actions.append(ResponseAction(
+                    title: "Write to VS Code",
+                    description: "Insert code into VS Code",
+                    actionType: .writeToApp,
+                    payload: responseText
+                ))
+            } else if appName.lowercased().contains("xcode") {
+                actions.append(ResponseAction(
+                    title: "Write to Xcode",
+                    description: "Insert code into Xcode",
+                    actionType: .writeToApp,
+                    payload: responseText
+                ))
+            } else if appName.lowercased().contains("word") {
+                actions.append(ResponseAction(
+                    title: "Write to Word",
+                    description: "Insert text into Microsoft Word",
+                    actionType: .writeToApp,
+                    payload: responseText
+                ))
+            } else if appName.lowercased().contains("excel") {
+                actions.append(ResponseAction(
+                    title: "Write to Excel",
+                    description: "Insert content into Excel",
+                    actionType: .writeToApp,
+                    payload: responseText
+                ))
+            } else if appName.lowercased().contains("pages") {
+                actions.append(ResponseAction(
+                    title: "Write to Pages",
+                    description: "Insert text into Pages",
+                    actionType: .writeToApp,
+                    payload: responseText
+                ))
+            } else if appName.lowercased().contains("chrome") {
+                actions.append(ResponseAction(
+                    title: "Write to Chrome",
+                    description: "Insert text into current Chrome tab",
+                    actionType: .writeToApp,
+                    payload: responseText
+                ))
+            } else {
+                // Generic write button for any supported app
+                actions.append(ResponseAction(
+                    title: "Write to \(appName)",
+                    description: "Insert content into \(appName)",
+                    actionType: .writeToApp,
+                    payload: responseText
+                ))
+            }
+        }
+        
+        // 🔍 SMART WEB SEARCH DETECTION
+        if responseText.lowercased().contains("search") || responseText.lowercased().contains("google") || 
+           responseText.lowercased().contains("amazon") || responseText.lowercased().contains("find") {
+            
+            let searchQuery = extractSearchQuery(from: responseText)
+            if !searchQuery.isEmpty {
+                // Detect specific search engines
+                if responseText.lowercased().contains("amazon") {
+                    actions.append(ResponseAction(
+                        title: "Search Amazon",
+                        description: "Search on Amazon",
+                        actionType: .searchWeb,
+                        payload: "https://amazon.com/s?k=\(searchQuery.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? "")"
+                    ))
+                } else if responseText.lowercased().contains("youtube") {
+                    actions.append(ResponseAction(
+                        title: "Search YouTube",
+                        description: "Search on YouTube",
+                        actionType: .searchWeb,
+                        payload: "https://youtube.com/results?search_query=\(searchQuery.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? "")"
+                    ))
+                } else {
+                    actions.append(ResponseAction(
+                        title: "Search Google",
+                        description: "Search on Google",
+                        actionType: .searchWeb,
+                        payload: "https://google.com/search?q=\(searchQuery.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? "")"
+                    ))
+                }
+            }
+        }
+        
+        // 📱 APP OPENING DETECTION
+        let suggestedApp = extractSuggestedApp(from: responseText)
+        if !suggestedApp.isEmpty {
+            actions.append(ResponseAction(
+                title: "Open \(suggestedApp)",
+                description: "Launch \(suggestedApp)",
+                actionType: .openApp,
+                payload: suggestedApp
+            ))
+        }
+        
+        // 📋 COPY TEXT DETECTION
+        if responseText.count > 10 { // Any meaningful response can be copied
+            actions.append(ResponseAction(
+                title: "Copy Response",
+                description: "Copy full response to clipboard",
+                actionType: .copyText,
+                payload: responseText
+            ))
+        }
+        
+        // Update UI with discovered actions
+        DispatchQueue.main.async {
+            withAnimation {
+                self.pendingActions = actions
+                self.showingActionButtons = !actions.isEmpty
+            }
+        }
+        
+        print("🎯 DISCOVERED \(actions.count) ACTIONS")
+        for action in actions {
+            print("   - \(action.title): \(action.description)")
+        }
+    }
+    
+    private func extractSuggestedText(from response: String) -> String {
+        // Simple text extraction - look for quoted text or code blocks
+        let patterns = [
+            "\"([^\"]+)\"",  // Text in quotes
+            "`([^`]+)`",    // Text in backticks
+            "```[\\s\\S]*?```", // Code blocks
+        ]
+        
+        for pattern in patterns {
+            if let regex = try? NSRegularExpression(pattern: pattern),
+               let match = regex.firstMatch(in: response, range: NSRange(response.startIndex..., in: response)) {
+                let matchedString = String(response[Range(match.range, in: response)!])
+                return matchedString.trimmingCharacters(in: CharacterSet(charactersIn: "\"`"))
+            }
+        }
+        
+        return ""
+    }
+    
+    private func extractSuggestedApp(from response: String) -> String {
+        let apps = ["Chrome", "Safari", "Firefox", "Word", "Excel", "PowerPoint", "Pages", "Numbers", "Keynote", "Xcode", "VS Code", "Cursor", "Slack", "Discord", "Mail", "Messages", "Notion", "Zoom", "Teams"]
+        
+        for app in apps {
+            if response.lowercased().contains(app.lowercased()) {
+                return app
+            }
+        }
+        
+        return ""
+    }
+    
+    private func extractTextToCopy(from response: String) -> String {
+        // Extract text that should be copied
+        return extractSuggestedText(from: response)
+    }
+    
+    private func extractSearchQuery(from response: String) -> String {
+        // Extract search query from the user's original input or response
+        // First try to get it from the user's search text
+        if !searchText.isEmpty {
+            return searchText
+        }
+        
+        // Look for quoted text or specific search patterns
+        let patterns = [
+            "search for \"([^\"]+)\"",
+            "search \"([^\"]+)\"",
+            "find \"([^\"]+)\"",
+            "look up \"([^\"]+)\"",
+            "amazon \"([^\"]+)\"",
+        ]
+        
+        for pattern in patterns {
+            if let regex = try? NSRegularExpression(pattern: pattern, options: .caseInsensitive),
+               let match = regex.firstMatch(in: response, range: NSRange(response.startIndex..., in: response)),
+               match.numberOfRanges > 1 {
+                let matchRange = Range(match.range(at: 1), in: response)!
+                return String(response[matchRange])
+            }
+        }
+        
+        // Fallback: use the first few words if no pattern found
+        let words = response.components(separatedBy: .whitespacesAndNewlines)
+            .filter { !$0.isEmpty }
+            .prefix(3)
+        
+        return words.joined(separator: " ")
     }
 }
 

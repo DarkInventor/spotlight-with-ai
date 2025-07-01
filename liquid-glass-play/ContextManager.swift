@@ -613,27 +613,107 @@ class ContextManager: ObservableObject {
     
     // MARK: - Smart AI Integration
     
-    func getContextualPrompt(for userQuery: String) -> String {
+    func getContextualPrompt(for userQuery: String, includeScreenshotContext: Bool = false) -> String {
         guard let context = currentContext else {
-            return userQuery
+            return """
+            🤖 AI AGENT MODE: You are an intelligent AI assistant that can see and interact with the user's screen. 
+            
+            IMPORTANT: The user expects you to show your response FIRST with action buttons, not execute actions immediately. Be conversational and helpful.
+            
+            User's request: \(userQuery)
+            """
         }
         
         var contextualPrompt = """
-        User is currently \(context.detectedActivity).
-        App: \(context.appName)
-        Window: \(context.windowTitle)
+        🤖 AI AGENT MODE: You are an intelligent AI assistant with screen awareness and automation capabilities.
+        
+        🎯 CURRENT CONTEXT:
+        - Activity: \(context.detectedActivity)
+        - App: \(context.appName)
+        - Window: \(context.windowTitle)
         
         """
         
-        if let extractedText = context.extractedText, !extractedText.isEmpty {
-            // Include relevant snippet of what's on screen
-            let snippet = String(extractedText.prefix(500)) // First 500 chars
-            contextualPrompt += "Current content visible: \(snippet)\n\n"
+        if includeScreenshotContext {
+            contextualPrompt += """
+            📸 VISUAL CONTEXT: I can see your current screen automatically captured when you opened this assistant. I understand what you're working on and can provide specific help based on what's visible.
+            
+            """
         }
         
-        contextualPrompt += "User's request: \(userQuery)"
+        if let extractedText = context.extractedText, !extractedText.isEmpty {
+            // Include relevant snippet of what's on screen
+            let snippet = String(extractedText.prefix(300)) // Reduced for better prompting
+            contextualPrompt += "📝 Screen content: \(snippet)\n\n"
+        }
+        
+        // App-specific guidance
+        let appSpecificGuidance = getAppSpecificGuidance(for: context.appName)
+        if !appSpecificGuidance.isEmpty {
+            contextualPrompt += "\(appSpecificGuidance)\n\n"
+        }
+        
+        if context.canWriteIntoApp {
+            contextualPrompt += """
+            ✨ AUTOMATION READY: I can write directly into \(context.appName) for you. Just ask me what you need and I'll show you the response first, then provide action buttons to execute.
+            
+            """
+        }
+        
+        contextualPrompt += """
+        🎯 RESPONSE STYLE:
+        - Be conversational and helpful, like Cursor IDE's AI
+        - Show your analysis/answer FIRST 
+        - Don't immediately execute actions - let the user see your response
+        - If you can help with automation (writing code, text, opening apps, web searches), mention it naturally
+        - Be specific about what you see on their screen when relevant
+        - Provide actionable suggestions based on their current work
+        
+        💭 User's question: \(userQuery)
+        
+        Remember: Show your response first, then action buttons will appear automatically for any actions I can perform.
+        """
         
         return contextualPrompt
+    }
+    
+    private func getAppSpecificGuidance(for appName: String) -> String {
+        let appLower = appName.lowercased()
+        
+        switch appLower {
+        case let app where app.contains("cursor"):
+            return "💻 CURSOR IDE DETECTED: I can help with code review, writing new code, debugging, explaining code, and implementing features. I can write code directly into your editor."
+            
+        case let app where app.contains("visual studio code") || app.contains("vs code"):
+            return "💻 VS CODE DETECTED: I can help with coding tasks, write code snippets, debug issues, and explain code. I can insert code directly into your editor."
+            
+        case let app where app.contains("xcode"):
+            return "🔨 XCODE DETECTED: I can help with Swift/Objective-C development, debugging, and iOS/macOS app development. I can write code directly into Xcode."
+            
+        case let app where app.contains("chrome") || app.contains("safari") || app.contains("firefox"):
+            return "🌐 BROWSER DETECTED: I can help you navigate websites, search the web, fill forms, and assist with web-based work. I can perform web searches and open specific sites."
+            
+        case let app where app.contains("word"):
+            return "📝 MICROSOFT WORD DETECTED: I can help with writing, editing, formatting documents, and content creation. I can write text directly into your document."
+            
+        case let app where app.contains("excel"):
+            return "📊 EXCEL DETECTED: I can help with spreadsheet tasks, formulas, data analysis, and formatting. I can insert content directly into Excel."
+            
+        case let app where app.contains("pages"):
+            return "📄 PAGES DETECTED: I can help with document creation, writing, and formatting. I can write text directly into Pages."
+            
+        case let app where app.contains("photoshop"):
+            return "🎨 PHOTOSHOP DETECTED: I can help with photo editing techniques, layer management, effects, and design guidance based on what's visible on your screen."
+            
+        case let app where app.contains("illustrator"):
+            return "🎨 ILLUSTRATOR DETECTED: I can help with vector design, typography, color schemes, and design techniques based on your current artwork."
+            
+        case let app where app.contains("figma"):
+            return "🎨 FIGMA DETECTED: I can help with UI/UX design, prototyping, component creation, and design systems based on your current work."
+            
+        default:
+            return ""
+        }
     }
     
     // MARK: - Write Into App

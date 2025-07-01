@@ -109,7 +109,7 @@ class AppAutomationManager: ObservableObject {
         AppAutomationTarget(
             bundleIdentifier: "com.todesktop.230313mzl4w4u92",
             displayName: "Cursor",
-            automationStrategy: .accessibility,
+            automationStrategy: .hybrid,
             supportedActions: [.typeText(""), .insertAtCursor("")]
         ),
         AppAutomationTarget(
