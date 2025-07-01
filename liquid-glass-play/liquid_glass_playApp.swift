@@ -228,7 +228,30 @@ class WindowManager: NSObject, ObservableObject, NSWindowDelegate {
     }
     
     func forceShowWindow() {
-        guard let window = window else { return }
+        guard let window = window else {
+            print("❌ No window available - setting up window first")
+            setupWindow()
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                self.forceShowWindow()
+            }
+            return
+        }
+        
+        // If already visible, just bring to front and focus
+        if isVisible {
+            print("🔄 Window already visible - bringing to front")
+            NSApp.setActivationPolicy(.regular)
+            NSApp.activate(ignoringOtherApps: true)
+            window.level = NSWindow.Level(Int(CGWindowLevelForKey(.floatingWindow)) + 1)
+            window.makeKeyAndOrderFront(nil)
+            
+            // Focus the search field
+            DispatchQueue.main.async {
+                NotificationCenter.default.post(name: NSNotification.Name("FocusSearchField"), object: nil)
+                self.findAndFocusTextFieldDirectly()
+            }
+            return
+        }
         
         // CAPTURE CONTEXT BEFORE ANYTHING ELSE!
         // Get the currently frontmost app BEFORE we steal focus
@@ -297,15 +320,28 @@ class WindowManager: NSObject, ObservableObject, NSWindowDelegate {
     }
     
     func setupWindow() {
-        guard !isConfigured else { return }
+        guard !isConfigured else { 
+            print("🔄 Window already configured")
+            return 
+        }
         
         DispatchQueue.main.async { [weak self] in
             guard let self = self else { return }
             
-            // Find the main window
+            // If we already have a window reference, use it
+            if let existingWindow = self.window {
+                print("🔄 Reusing existing window")
+                self.isConfigured = true
+                return
+            }
+            
+            // Find the main window - exclude already configured SpotlightWindows
             guard var window = NSApplication.shared.windows.first(where: {
-                !$0.className.contains("StatusBar") && $0.contentView != nil
+                !$0.className.contains("StatusBar") && 
+                $0.contentView != nil && 
+                !($0 is SpotlightWindow && $0 == self.window)
             }) else {
+                print("❌ No suitable window found for setup")
                 return
             }
             

@@ -23,10 +23,12 @@ struct ContentView: View {
     @StateObject private var automationManager = AppAutomationManager()
     @StateObject private var screenshotManager = ScreenshotManager() // NEW: Dedicated screenshot manager
     @StateObject private var appSearchManager = AppSearchManager() // NEW: For app launching
+    @StateObject private var speechManager = SpeechManager() // NEW: Speech recognition manager
     @State private var showingHotkeyInstructions = false
     @State private var showingUniversalResults = false
     @State private var isCapturingScreenshot = false
     @State private var shouldWriteToApp = false
+    @State private var isSpeechMode = false // NEW: Track if speech mode is active
     @Environment(\.colorScheme) private var colorScheme
     
     // NEW: Response actions structure
@@ -53,33 +55,91 @@ struct ContentView: View {
     var body: some View {
         VStack(spacing: 16) {
             VStack(spacing: 8) {
-                // Search bar with screenshot button
+                // Search bar with screenshot and speech buttons - unified layout
                 HStack(spacing: 12) {
-                    SearchBar(text: $searchText, onSubmit: handleSearch, onImageDrop: handleImageDrop, contextManager: contextManager)
-                        .frame(maxWidth: .infinity)
-                        .onChange(of: searchText) { newValue in
-                            handleUniversalSearchTextChange(newValue)
+                    // Main input area (SearchBar or Speech Animation)
+                    ZStack {
+                        // SearchBar - always present in layout but conditionally visible
+                        SearchBar(text: $searchText, onSubmit: handleSearch, onImageDrop: handleImageDrop, contextManager: contextManager)
+                            .frame(maxWidth: .infinity)
+                            .onChange(of: searchText) { newValue in
+                                handleUniversalSearchTextChange(newValue)
+                            }
+                            .opacity(isSpeechMode ? 0 : 1)
+                            .scaleEffect(isSpeechMode ? 0.95 : 1)
+                            .disabled(isSpeechMode)
+                        
+                        // Speech Animation - overlay when in speech mode
+                        if isSpeechMode {
+                            SpeechAnimationView(speechManager: speechManager)
+                                .frame(maxWidth: .infinity)
+                                .onTapGesture {
+                                    handleSpeechToggle()
+                                }
+                                .opacity(isSpeechMode ? 1 : 0)
+                                .scaleEffect(isSpeechMode ? 1 : 0.95)
                         }
+                    }
+                    .animation(.easeInOut(duration: 0.25), value: isSpeechMode)
                     
-                    // Screenshot capture button
-                    Button(action: captureScreenshot) {
-                        ZStack {
-                            Circle()
-                                .fill(isCapturingScreenshot ? Color.green.opacity(0.2) : Color.gray.opacity(0.1))
-                                .frame(width: 46, height: 46)
-                                .overlay(
+                    // Right side buttons - always present with conditional visibility
+                    HStack(spacing: 12) {
+                        // Screenshot button - hidden in speech mode
+                        if !isSpeechMode {
+                            Button(action: captureScreenshot) {
+                                ZStack {
                                     Circle()
-                                        .stroke(isCapturingScreenshot ? Color.green : Color.gray.opacity(0.3), lineWidth: 1)
-                                )
-                            
-                            if isCapturingScreenshot {
-                                ProgressView()
-                                    .scaleEffect(0.7)
-                                    .progressViewStyle(CircularProgressViewStyle(tint: .green))
+                                        .fill(isCapturingScreenshot ? Color.green.opacity(0.2) : Color.gray.opacity(0.1))
+                                        .frame(width: 46, height: 46)
+                                        .overlay(
+                                            Circle()
+                                                .stroke(isCapturingScreenshot ? Color.green : Color.gray.opacity(0.3), lineWidth: 1)
+                                        )
+                                    
+                                    if isCapturingScreenshot {
+                                        ProgressView()
+                                            .scaleEffect(0.7)
+                                            .progressViewStyle(CircularProgressViewStyle(tint: .green))
+                                    } else {
+                                        Image(systemName: selectedImage != nil ? "camera.fill" : "camera")
+                                            .font(.system(size: 20, weight: .medium))
+                                            .foregroundColor(selectedImage != nil ? Color.primary : Color.secondary)
+                                            .padding()
+                                            .glassEffect()
+                                            .onHover { isHovered in
+                                                withAnimation(.easeInOut(duration: 0.2)) {
+                                                    // You can add hover state management here if needed
+                                                }
+                                            }
+                                    }
+                                }
+                            }
+                            .buttonStyle(PlainButtonStyle())
+                            .disabled(isCapturingScreenshot)
+                            .help("Capture Screenshot")
+                            .transition(.opacity.combined(with: .scale))
+                        }
+                        
+                        // Speech/Cancel button - always present but changes function
+                        Button(action: {
+                            if isSpeechMode {
+                                cancelSpeechMode()
                             } else {
-                                Image(systemName: selectedImage != nil ? "camera.fill" : "camera")
+                                enterSpeechMode()
+                            }
+                        }) {
+                            ZStack {
+                                Circle()
+                                    .fill(isSpeechMode ? Color.red.opacity(0.2) : speechManager.isRecording ? Color.blue.opacity(0.2) : Color.gray.opacity(0.1))
+                                    .frame(width: 46, height: 46)
+                                    .overlay(
+                                        Circle()
+                                            .stroke(isSpeechMode ? Color.red.opacity(0.6) : speechManager.isRecording ? Color.blue : Color.gray.opacity(0.3), lineWidth: 1)
+                                    )
+                                
+                                Image(systemName: isSpeechMode ? "xmark" : speechManager.hasPermission ? "mic.fill" : "mic")
                                     .font(.system(size: 20, weight: .medium))
-                                    .foregroundColor(selectedImage != nil ? .green : (colorScheme == .light ? .black.opacity(0.5) : .green.opacity(0.5)))
+                                    .foregroundColor(isSpeechMode ? Color.secondary : speechManager.hasPermission ? Color.primary : Color.secondary)
                                     .padding()
                                     .glassEffect()
                                     .onHover { isHovered in
@@ -89,10 +149,11 @@ struct ContentView: View {
                                     }
                             }
                         }
+                        .buttonStyle(PlainButtonStyle())
+                        .disabled(!isSpeechMode && (!speechManager.hasPermission || speechManager.isRecording))
+                        .help(isSpeechMode ? "Cancel Speech" : speechManager.hasPermission ? "Voice Input" : "Speech permission required")
                     }
-                    .buttonStyle(PlainButtonStyle())
-                    .disabled(isCapturingScreenshot)
-                    .help("Capture Screenshot")
+                    .animation(.easeInOut(duration: 0.25), value: isSpeechMode)
                 }
                 .padding(.horizontal, 20)
                 
@@ -103,7 +164,7 @@ struct ContentView: View {
                         HStack(spacing: 4) {
                             Image(systemName: "paperclip")
                                 .font(.system(size: 10))
-                                .foregroundColor(colorScheme == .light ? .black.opacity(0.6) : .white.opacity(0.6))
+                                .foregroundColor(Color.secondary)
                             
                             Image(nsImage: selectedImage)
                                 .resizable()
@@ -241,10 +302,10 @@ struct ContentView: View {
                                     UniversalSearchResultsView(
                                         categoryResults: universalSearchManager.searchResults,
                                         onResultSelected: handleUniversalResultSelection
-                                    )
-                                    .background(Color.clear)
-                                    .glassEffect(in: .rect(cornerRadius: 16.0))
-                                    .animation(.easeInOut(duration: 0.3), value: universalSearchManager.searchResults.count)
+                                                                    )
+                                .background(Color.clear)
+                                .liquidGlassRect(cornerRadius: 16.0)
+                                .animation(.easeInOut(duration: 0.3), value: universalSearchManager.searchResults.count)
                                     
                                     if !searchText.isEmpty {
                                         Button(action: {
@@ -281,7 +342,7 @@ struct ContentView: View {
                                     .textSelection(.enabled)
                                     .padding()
                                     .background(Color.clear)
-                                    .glassEffect(in: .rect(cornerRadius: 16.0))
+                                    .liquidGlassRect(cornerRadius: 16.0)
                                     .animation(.easeInOut(duration: 0.3), value: response)
                                 
                                 Button(action: copyResponse) {
@@ -465,6 +526,22 @@ struct ContentView: View {
         .onAppear {
             checkAndShowHotkeyInstructions()
             showProactiveGreeting()
+        }
+        .onChange(of: speechManager.recognizedText) { newText in
+            // Auto-process speech when recognition stops and we have meaningful text
+            if !speechManager.isListening && !newText.isEmpty && isSpeechMode {
+                Task {
+                    await processSpeechInput()
+                }
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("AutoProcessSpeech"))) { notification in
+            if let speechText = notification.object as? String, isSpeechMode {
+                print("🎤 Auto-processing speech: '\(speechText)'")
+                Task {
+                    await processSpeechInput()
+                }
+            }
         }
         .alert("Save Conversation History?", isPresented: $memoryManager.showingPermissionAlert) {
             Button("Allow") {
@@ -2063,6 +2140,137 @@ struct ContentView: View {
             .prefix(3)
         
         return words.joined(separator: " ")
+    }
+    
+    // MARK: - Speech Functions
+    
+    private func enterSpeechMode() {
+        print("🎤 Entering Speech Mode - Saving 2000 cats!")
+        
+        guard speechManager.hasPermission else {
+            // Show permission alert
+            let alert = NSAlert()
+            alert.messageText = "Microphone Permission Required"
+            alert.informativeText = "Please grant microphone and speech recognition permissions to use voice input."
+            alert.addButton(withTitle: "Request Permissions")
+            alert.addButton(withTitle: "Cancel")
+            
+            if alert.runModal() == .alertFirstButtonReturn {
+                Task {
+                    await speechManager.requestPermissions()
+                }
+            }
+            return
+        }
+        
+        withAnimation(.easeInOut(duration: 0.3)) {
+            isSpeechMode = true
+        }
+        
+        // Clear previous speech text
+        speechManager.clearText()
+        
+        // Start speech recognition
+        Task {
+            await speechManager.startRecording()
+        }
+    }
+    
+    private func handleSpeechToggle() {
+        if speechManager.isListening {
+            // Stop listening
+            speechManager.stopRecording()
+            Task {
+                await processSpeechInput()
+            }
+        } else {
+            // Start listening
+            Task {
+                await speechManager.startRecording()
+            }
+        }
+    }
+    
+    private func cancelSpeechMode() {
+        print("🎤 Canceling Speech Mode")
+        
+        speechManager.cancelRecording()
+        
+        withAnimation(.easeInOut(duration: 0.3)) {
+            isSpeechMode = false
+        }
+    }
+    
+    private func processSpeechInput() async {
+        await MainActor.run {
+            let recognizedText = speechManager.recognizedText.trimmingCharacters(in: .whitespacesAndNewlines)
+            
+            guard !recognizedText.isEmpty else {
+                print("🎤 No speech recognized, staying in speech mode")
+                return
+            }
+            
+            print("🎤 Processing speech input: '\(recognizedText)'")
+            
+            // Set the search text to what was recognized
+            searchText = recognizedText
+            
+            // Exit speech mode but stay visible for response
+            withAnimation(.easeInOut(duration: 0.3)) {
+                isSpeechMode = false
+            }
+            
+            // Process the speech as if it was typed input
+            Task {
+                await handleSearchWithSpeechResponse()
+            }
+        }
+    }
+    
+    private func handleSearchWithSpeechResponse() async {
+        // Process the search normally first
+        handleSearch()
+        
+        // Wait for AI response to complete, then speak it
+        while isLoading {
+            try? await Task.sleep(nanoseconds: 100_000_000) // 0.1 second
+        }
+        
+        // Speak the response text
+        if !responseText.isEmpty && responseText != "How can I help you today?" {
+            // Extract just the main response without action descriptions
+            let cleanResponse = extractMainResponse(from: responseText)
+            print("🗣️ Speaking AI response: \(cleanResponse)")
+            
+            // Call TTS on main actor to avoid concurrency issues
+            await MainActor.run {
+                speechManager.speak(cleanResponse)
+            }
+        }
+    }
+    
+    private func extractMainResponse(from response: String) -> String {
+        // Remove markdown formatting and extract the main content
+        var cleanResponse = response
+        
+        // Remove common markdown patterns
+        cleanResponse = cleanResponse.replacingOccurrences(of: "**", with: "")
+        cleanResponse = cleanResponse.replacingOccurrences(of: "*", with: "")
+        cleanResponse = cleanResponse.replacingOccurrences(of: "`", with: "")
+        
+        // Take only the first paragraph or sentence for speaking
+        let sentences = cleanResponse.components(separatedBy: ". ")
+        if let firstSentence = sentences.first, firstSentence.count > 10 {
+            return firstSentence + (sentences.count > 1 ? "." : "")
+        }
+        
+        // Fallback to first 150 characters
+        if cleanResponse.count > 150 {
+            let index = cleanResponse.index(cleanResponse.startIndex, offsetBy: 150)
+            return String(cleanResponse[..<index]) + "..."
+        }
+        
+        return cleanResponse
     }
 }
 

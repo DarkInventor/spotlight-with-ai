@@ -231,7 +231,7 @@ struct SearchBar: View {
                 // that match the view's clip shape.
                 RoundedRectangle(cornerRadius: 36)
                     .fill(colorScheme == .light ? Color.white.opacity(0.4) : Color.clear)
-                    .glassEffect()
+                    .applyLiquidGlass()
                     .overlay(
                         RoundedRectangle(cornerRadius: 36)
                             .stroke(isDragOver ? Color.blue.opacity(0.8) : Color.clear, lineWidth: 3)
@@ -270,6 +270,7 @@ struct SearchBar: View {
         } else {
             Image(systemName: "magnifyingglass")
                 .font(.system(size: 18, weight: .medium))
+                .foregroundColor(Color.secondary)
         }
     }
     
