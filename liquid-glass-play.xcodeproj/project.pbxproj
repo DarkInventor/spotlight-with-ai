@@ -10,6 +10,13 @@
 		DFA1DEB92E0FCECE0070E4F5 /* GoogleGenerativeAI in Frameworks */ = {isa = PBXBuildFile; productRef = DFA1DEB82E0FCECE0070E4F5 /* GoogleGenerativeAI */; };
 		DFA1DEC02E0FDB530070E4F5 /* SwiftfulLoadingIndicators in Frameworks */ = {isa = PBXBuildFile; productRef = DFA1DEBF2E0FDB530070E4F5 /* SwiftfulLoadingIndicators */; };
 		DFA1DECC2E0FFF410070E4F5 /* ScreenCaptureKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = DFA1DECB2E0FFF410070E4F5 /* ScreenCaptureKit.framework */; platformFilters = (macos, ); };
+		DFF37E662E1545E40090D06D /* FirebaseAI in Frameworks */ = {isa = PBXBuildFile; productRef = DFF37E652E1545E40090D06D /* FirebaseAI */; };
+		DFF37E682E1545E40090D06D /* FirebaseAnalytics in Frameworks */ = {isa = PBXBuildFile; productRef = DFF37E672E1545E40090D06D /* FirebaseAnalytics */; };
+		DFF37E6A2E1545E40090D06D /* FirebaseAnalyticsCore in Frameworks */ = {isa = PBXBuildFile; productRef = DFF37E692E1545E40090D06D /* FirebaseAnalyticsCore */; };
+		DFF37E6C2E1545E40090D06D /* FirebaseAnalyticsIdentitySupport in Frameworks */ = {isa = PBXBuildFile; productRef = DFF37E6B2E1545E40090D06D /* FirebaseAnalyticsIdentitySupport */; };
+		DFF37E6E2E1545E40090D06D /* FirebaseAnalyticsOnDeviceConversion in Frameworks */ = {isa = PBXBuildFile; productRef = DFF37E6D2E1545E40090D06D /* FirebaseAnalyticsOnDeviceConversion */; };
+		DFF37E702E1546D20090D06D /* FirebaseAuth in Frameworks */ = {isa = PBXBuildFile; productRef = DFF37E6F2E1546D20090D06D /* FirebaseAuth */; };
+		DFF37E722E1546E70090D06D /* FirebaseFirestore in Frameworks */ = {isa = PBXBuildFile; productRef = DFF37E712E1546E70090D06D /* FirebaseFirestore */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -74,8 +81,15 @@
 			buildActionMask = 2147483647;
 			files = (
 				DFA1DEB92E0FCECE0070E4F5 /* GoogleGenerativeAI in Frameworks */,
+				DFF37E6A2E1545E40090D06D /* FirebaseAnalyticsCore in Frameworks */,
+				DFF37E662E1545E40090D06D /* FirebaseAI in Frameworks */,
+				DFF37E722E1546E70090D06D /* FirebaseFirestore in Frameworks */,
+				DFF37E6C2E1545E40090D06D /* FirebaseAnalyticsIdentitySupport in Frameworks */,
+				DFF37E702E1546D20090D06D /* FirebaseAuth in Frameworks */,
 				DFA1DECC2E0FFF410070E4F5 /* ScreenCaptureKit.framework in Frameworks */,
+				DFF37E682E1545E40090D06D /* FirebaseAnalytics in Frameworks */,
 				DFA1DEC02E0FDB530070E4F5 /* SwiftfulLoadingIndicators in Frameworks */,
+				DFF37E6E2E1545E40090D06D /* FirebaseAnalyticsOnDeviceConversion in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -148,6 +162,13 @@
 			packageProductDependencies = (
 				DFA1DEB82E0FCECE0070E4F5 /* GoogleGenerativeAI */,
 				DFA1DEBF2E0FDB530070E4F5 /* SwiftfulLoadingIndicators */,
+				DFF37E652E1545E40090D06D /* FirebaseAI */,
+				DFF37E672E1545E40090D06D /* FirebaseAnalytics */,
+				DFF37E692E1545E40090D06D /* FirebaseAnalyticsCore */,
+				DFF37E6B2E1545E40090D06D /* FirebaseAnalyticsIdentitySupport */,
+				DFF37E6D2E1545E40090D06D /* FirebaseAnalyticsOnDeviceConversion */,
+				DFF37E6F2E1546D20090D06D /* FirebaseAuth */,
+				DFF37E712E1546E70090D06D /* FirebaseFirestore */,
 			);
 			productName = "liquid-glass-play";
 			productReference = DF09377B2E0E940800FF89F9 /* liquid-glass-play.app */;
@@ -234,6 +255,7 @@
 			packageReferences = (
 				DFA1DEB32E0FCD280070E4F5 /* XCRemoteSwiftPackageReference "generative-ai-swift" */,
 				DFA1DEBE2E0FDB530070E4F5 /* XCRemoteSwiftPackageReference "SwiftfulLoadingIndicators" */,
+				DFF37E642E1545E40090D06D /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = DF09377C2E0E940800FF89F9 /* Products */;
@@ -717,6 +739,14 @@
 				minimumVersion = 0.0.4;
 			};
 		};
+		DFF37E642E1545E40090D06D /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/firebase/firebase-ios-sdk";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 11.15.0;
+			};
+		};
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
@@ -729,6 +759,41 @@
 			isa = XCSwiftPackageProductDependency;
 			package = DFA1DEBE2E0FDB530070E4F5 /* XCRemoteSwiftPackageReference "SwiftfulLoadingIndicators" */;
 			productName = SwiftfulLoadingIndicators;
+		};
+		DFF37E652E1545E40090D06D /* FirebaseAI */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = DFF37E642E1545E40090D06D /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
+			productName = FirebaseAI;
+		};
+		DFF37E672E1545E40090D06D /* FirebaseAnalytics */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = DFF37E642E1545E40090D06D /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
+			productName = FirebaseAnalytics;
+		};
+		DFF37E692E1545E40090D06D /* FirebaseAnalyticsCore */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = DFF37E642E1545E40090D06D /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
+			productName = FirebaseAnalyticsCore;
+		};
+		DFF37E6B2E1545E40090D06D /* FirebaseAnalyticsIdentitySupport */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = DFF37E642E1545E40090D06D /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
+			productName = FirebaseAnalyticsIdentitySupport;
+		};
+		DFF37E6D2E1545E40090D06D /* FirebaseAnalyticsOnDeviceConversion */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = DFF37E642E1545E40090D06D /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
+			productName = FirebaseAnalyticsOnDeviceConversion;
+		};
+		DFF37E6F2E1546D20090D06D /* FirebaseAuth */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = DFF37E642E1545E40090D06D /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
+			productName = FirebaseAuth;
+		};
+		DFF37E712E1546E70090D06D /* FirebaseFirestore */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = DFF37E642E1545E40090D06D /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
+			productName = FirebaseFirestore;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

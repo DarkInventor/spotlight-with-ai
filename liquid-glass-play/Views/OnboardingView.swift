@@ -7,8 +7,19 @@ struct OnboardingView: View {
     @State private var showFinalAnimation = false
     @Environment(\.colorScheme) private var colorScheme
     @Namespace private var heroNamespace
+    @StateObject private var firebaseManager = FirebaseManager()
     
-    private let totalPages = 4
+    // User input fields
+    @State private var userName = ""
+    @State private var userEmail = ""
+    @State private var password = ""
+    @State private var isSignUp = true
+    @State private var showingAuthError = false
+    
+    private var totalPages: Int {
+        // If user is authenticated, show only 2 pages (welcome back + start)
+        return firebaseManager.isAuthenticated ? 2 : 5
+    }
     
     var body: some View {
         ZStack {
@@ -20,34 +31,11 @@ struct OnboardingView: View {
                 
                 // Main content with enhanced glass transitions
                 ZStack {
-                    switch currentPage {
-                    case 0:
-                        heroPage
-                            .transition(.asymmetric(
-                                insertion: .move(edge: .trailing).combined(with: .opacity),
-                                removal: .move(edge: .leading).combined(with: .opacity)
-                            ))
-                    case 1:
-                        visualPage
-                            .transition(.asymmetric(
-                                insertion: .move(edge: .trailing).combined(with: .opacity),
-                                removal: .move(edge: .leading).combined(with: .opacity)
-                            ))
-                    case 2:
-                        capabilityPage
-                            .transition(.asymmetric(
-                                insertion: .move(edge: .trailing).combined(with: .opacity),
-                                removal: .move(edge: .leading).combined(with: .opacity)
-                            ))
-                    case 3:
-                        startPage
-                            .transition(.asymmetric(
-                                insertion: .move(edge: .trailing).combined(with: .opacity),
-                                removal: .move(edge: .leading).combined(with: .opacity)
-                            ))
-                    default:
-                        heroPage
-                    }
+                    currentPageView
+                        .transition(.asymmetric(
+                            insertion: .move(edge: .trailing).combined(with: .opacity),
+                            removal: .move(edge: .leading).combined(with: .opacity)
+                        ))
                 }
                 .animation(.spring(response: 0.6, dampingFraction: 0.8), value: currentPage)
                 
@@ -69,7 +57,7 @@ struct OnboardingView: View {
                 VStack(spacing: 12) {
                     Button(action: nextPage) {
                         HStack(spacing: 8) {
-                            Text(currentPage == totalPages - 1 ? "Get Started" : "Continue")
+                            Text(getButtonText())
                                 .font(.system(size: 17, weight: .semibold))
                                 .foregroundColor(.white)
                             
@@ -122,6 +110,39 @@ struct OnboardingView: View {
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
                     showFinalAnimation = true
                 }
+            }
+        }
+    }
+    
+    // MARK: - Current Page Logic
+    
+    @ViewBuilder
+    private var currentPageView: some View {
+        if firebaseManager.isAuthenticated {
+            // Shortened flow for authenticated users
+            switch currentPage {
+            case 0:
+                authPage // Welcome back page
+            case 1:
+                startPage
+            default:
+                authPage
+            }
+        } else {
+            // Full flow for new users
+            switch currentPage {
+            case 0:
+                heroPage
+            case 1:
+                visualPage
+            case 2:
+                compactCapabilityPage
+            case 3:
+                authPage
+            case 4:
+                startPage
+            default:
+                heroPage
             }
         }
     }
@@ -271,6 +292,273 @@ struct OnboardingView: View {
         .padding(.horizontal, 40)
     }
     
+    // MARK: - Compact Capability Page (Made smaller as requested)
+    private var compactCapabilityPage: some View {
+        VStack(spacing: 20) {
+            Text("Understands Your Context")
+                .font(.system(size: 28, weight: .semibold))
+                .foregroundColor(.primary)
+            
+            VStack(spacing: 12) {
+                CompactCapabilityRow(icon: "eye", title: "Sees what you're doing")
+                CompactCapabilityRow(icon: "brain", title: "Thinks contextually")
+                CompactCapabilityRow(icon: "gearshape.2", title: "Acts intelligently")
+            }
+            
+            HStack {
+                Image(systemName: "checkmark.shield.fill")
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundColor(.green)
+                
+                Text("Privacy-first • Everything stays on your Mac")
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundColor(.primary)
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 10)
+            .liquidGlassRect(cornerRadius: 16)
+            .overlay(
+                RoundedRectangle(cornerRadius: 16)
+                    .stroke(.green.opacity(0.3), lineWidth: 1)
+            )
+        }
+        .padding(.horizontal, 50)
+    }
+    
+    // MARK: - Authentication Page
+    private var authPage: some View {
+        VStack(spacing: 24) {
+            if firebaseManager.isAuthenticated {
+                // Welcome back view for already authenticated users
+                welcomeBackView
+            } else {
+                // Login/signup form for new users
+                authenticationForm
+            }
+        }
+        .padding(.horizontal, 50)
+        .alert("Authentication Error", isPresented: $showingAuthError) {
+            Button("OK") { }
+        } message: {
+            Text(firebaseManager.authError ?? "An error occurred")
+        }
+        .onChange(of: firebaseManager.authError) { error in
+            showingAuthError = error != nil
+        }
+    }
+    
+    // MARK: - Welcome Back View (for authenticated users)
+    private var welcomeBackView: some View {
+        VStack(spacing: 32) {
+            VStack(spacing: 12) {
+                Image(systemName: "person.circle.fill")
+                    .font(.system(size: 80, weight: .medium))
+                    .foregroundColor(.green)
+                
+                Text("Welcome Back!")
+                    .font(.system(size: 32, weight: .semibold))
+                    .foregroundColor(.primary)
+                
+                Text("Hello, \(firebaseManager.getUserDisplayName())")
+                    .font(.system(size: 20, weight: .medium))
+                    .foregroundColor(.blue)
+                
+                Text("You're already signed in and ready to go")
+                    .font(.system(size: 16, weight: .regular))
+                    .foregroundColor(.secondary)
+                    .multilineTextAlignment(.center)
+            }
+            
+            VStack(spacing: 16) {
+                // Account info card
+                VStack(spacing: 12) {
+                    HStack {
+                        Image(systemName: "envelope.fill")
+                            .font(.system(size: 14, weight: .medium))
+                            .foregroundColor(.blue)
+                        
+                        Text(firebaseManager.getUserEmail())
+                            .font(.system(size: 16, weight: .medium))
+                            .foregroundColor(.primary)
+                        
+                        Spacer()
+                        
+                        Text(firebaseManager.userProfile?.provider.capitalized ?? "")
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundColor(.secondary)
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 4)
+                            .background(Color.blue.opacity(0.1))
+                            .clipShape(RoundedRectangle(cornerRadius: 6))
+                    }
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 14)
+                .liquidGlassRect(cornerRadius: 12)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 12)
+                        .stroke(.green.opacity(0.3), lineWidth: 1)
+                )
+                
+                // Logout button
+                Button(action: {
+                    firebaseManager.signOut()
+                    // The onChange listener will handle showing the auth form
+                }) {
+                    HStack(spacing: 8) {
+                        Image(systemName: "rectangle.portrait.and.arrow.right")
+                            .font(.system(size: 16, weight: .medium))
+                        Text("Sign Out")
+                            .font(.system(size: 16, weight: .medium))
+                    }
+                    .foregroundColor(.red)
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 44)
+                    .background(Color.red.opacity(0.1))
+                    .clipShape(RoundedRectangle(cornerRadius: 12))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 12)
+                            .stroke(.red.opacity(0.3), lineWidth: 1)
+                    )
+                }
+                .buttonStyle(.plain)
+            }
+            .frame(maxWidth: 320)
+        }
+    }
+    
+    // MARK: - Authentication Form (for new users)
+    private var authenticationForm: some View {
+        VStack(spacing: 24) {
+            VStack(spacing: 12) {
+                Image(systemName: "person.circle.fill")
+                    .font(.system(size: 60, weight: .medium))
+                    .foregroundColor(.blue)
+                
+                Text("Create Your Account")
+                    .font(.system(size: 28, weight: .semibold))
+                    .foregroundColor(.primary)
+                
+                Text("Save your preferences and sync across devices")
+                    .font(.system(size: 16, weight: .regular))
+                    .foregroundColor(.secondary)
+                    .multilineTextAlignment(.center)
+            }
+            
+            VStack(spacing: 16) {
+                // Name field
+                HStack {
+                    Image(systemName: "person")
+                        .font(.system(size: 16, weight: .medium))
+                        .foregroundColor(.secondary)
+                        .frame(width: 20)
+                    
+                    TextField("Full Name", text: $userName)
+                        .textFieldStyle(.plain)
+                        .font(.system(size: 16))
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 14)
+                .liquidGlassRect(cornerRadius: 12)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 12)
+                        .stroke(.white.opacity(0.2), lineWidth: 1)
+                )
+                
+                // Email field
+                HStack {
+                    Image(systemName: "envelope")
+                        .font(.system(size: 16, weight: .medium))
+                        .foregroundColor(.secondary)
+                        .frame(width: 20)
+                    
+                    TextField("Email Address", text: $userEmail)
+                        .textFieldStyle(.plain)
+                        .font(.system(size: 16))
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 14)
+                .liquidGlassRect(cornerRadius: 12)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 12)
+                        .stroke(.white.opacity(0.2), lineWidth: 1)
+                )
+                
+                // Password field
+                HStack {
+                    Image(systemName: "lock")
+                        .font(.system(size: 16, weight: .medium))
+                        .foregroundColor(.secondary)
+                        .frame(width: 20)
+                    
+                    SecureField("Password", text: $password)
+                        .textFieldStyle(.plain)
+                        .font(.system(size: 16))
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 14)
+                .liquidGlassRect(cornerRadius: 12)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 12)
+                        .stroke(.white.opacity(0.2), lineWidth: 1)
+                )
+                
+                // Toggle between sign up/sign in
+                HStack {
+                    Button(action: { isSignUp = true }) {
+                        Text("Sign Up")
+                            .font(.system(size: 14, weight: .medium))
+                            .foregroundColor(isSignUp ? .blue : .secondary)
+                    }
+                    .buttonStyle(.plain)
+                    
+                    Text("•")
+                        .foregroundColor(.secondary)
+                    
+                    Button(action: { isSignUp = false }) {
+                        Text("Sign In")
+                            .font(.system(size: 14, weight: .medium))
+                            .foregroundColor(!isSignUp ? .blue : .secondary)
+                    }
+                    .buttonStyle(.plain)
+                }
+                
+                // Divider
+                HStack {
+                    VStack { Divider() }
+                    Text("or")
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundColor(.secondary)
+                        .padding(.horizontal, 12)
+                    VStack { Divider() }
+                }
+                .padding(.vertical, 8)
+                
+                // Anonymous option
+                Button(action: {
+                    Task {
+                        await firebaseManager.signInAnonymously()
+                        if firebaseManager.isAuthenticated {
+                            nextPage()
+                        }
+                    }
+                }) {
+                    Text("Continue without account")
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundColor(.secondary)
+                        .underline()
+                }
+                .buttonStyle(.plain)
+            }
+            .frame(maxWidth: 320)
+            
+            if firebaseManager.isLoading {
+                ProgressView()
+                    .scaleEffect(0.8)
+            }
+        }
+    }
+    
     private var startPage: some View {
         VStack(spacing: 32) {
             ZStack {
@@ -319,13 +607,94 @@ struct OnboardingView: View {
     
     // MARK: - Helper Functions
     
+    private func getButtonText() -> String {
+        if firebaseManager.isAuthenticated {
+            // For authenticated users
+            return currentPage == 0 ? "Continue" : "Start Using App"
+        } else {
+            // For new users
+            return currentPage == totalPages - 1 ? "Get Started" : "Continue"
+        }
+    }
+    
     private func nextPage() {
-        if currentPage < totalPages - 1 {
+        if firebaseManager.isAuthenticated {
+            // For authenticated users - simplified flow
+            if currentPage < totalPages - 1 {
+                withAnimation(.spring(response: 0.5, dampingFraction: 0.8)) {
+                    currentPage += 1
+                }
+            } else {
+                completeOnboarding()
+            }
+        } else {
+            // For new users - full flow with authentication
+            if currentPage == 3 {
+                handleAuthentication()
+                return
+            }
+            
+            if currentPage < totalPages - 1 {
+                withAnimation(.spring(response: 0.5, dampingFraction: 0.8)) {
+                    currentPage += 1
+                }
+            } else {
+                completeOnboarding()
+            }
+        }
+    }
+    
+    private func handleAuthentication() {
+        guard !userName.isEmpty || !userEmail.isEmpty else {
+            // Allow skipping authentication
             withAnimation(.spring(response: 0.5, dampingFraction: 0.8)) {
                 currentPage += 1
             }
-        } else {
-            completeOnboarding()
+            return
+        }
+        
+        Task {
+            if isSignUp {
+                // Validate inputs
+                guard !userName.isEmpty, !userEmail.isEmpty, !password.isEmpty else {
+                    firebaseManager.authError = "Please fill in all fields"
+                    return
+                }
+                
+                guard firebaseManager.isValidEmail(userEmail) else {
+                    firebaseManager.authError = "Please enter a valid email address"
+                    return
+                }
+                
+                guard password.count >= 6 else {
+                    firebaseManager.authError = "Password must be at least 6 characters"
+                    return
+                }
+                
+                let success = await firebaseManager.createUserWithEmail(userEmail, password: password, name: userName)
+                if success {
+                    await MainActor.run {
+                        withAnimation(.spring(response: 0.5, dampingFraction: 0.8)) {
+                            currentPage += 1
+                        }
+                    }
+                }
+            } else {
+                // Sign in
+                guard !userEmail.isEmpty, !password.isEmpty else {
+                    firebaseManager.authError = "Please enter email and password"
+                    return
+                }
+                
+                let success = await firebaseManager.signInWithEmail(userEmail, password: password)
+                if success {
+                    await MainActor.run {
+                        withAnimation(.spring(response: 0.5, dampingFraction: 0.8)) {
+                            currentPage += 1
+                        }
+                    }
+                }
+            }
         }
     }
     
@@ -392,6 +761,43 @@ struct CapabilityRow: View {
         .liquidGlassRect(cornerRadius: 16)
         .overlay(
             RoundedRectangle(cornerRadius: 16)
+                .stroke(.white.opacity(0.1), lineWidth: 1)
+        )
+    }
+}
+
+struct CompactCapabilityRow: View {
+    let icon: String
+    let title: String
+    
+    var body: some View {
+        HStack(spacing: 12) {
+            ZStack {
+                Circle()
+                    .fill(Color.clear)
+                    .frame(width: 32, height: 32)
+                    .liquidGlassRect(cornerRadius: 16)
+                    .overlay(
+                        Circle()
+                            .stroke(.white.opacity(0.2), lineWidth: 1)
+                    )
+                
+                Image(systemName: icon)
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundColor(.blue)
+            }
+            
+            Text(title)
+                .font(.system(size: 15, weight: .medium))
+                .foregroundColor(.primary)
+            
+            Spacer()
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
+        .liquidGlassRect(cornerRadius: 12)
+        .overlay(
+            RoundedRectangle(cornerRadius: 12)
                 .stroke(.white.opacity(0.1), lineWidth: 1)
         )
     }

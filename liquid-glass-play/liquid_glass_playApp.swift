@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import FirebaseCore
 #if canImport(AppKit)
 import AppKit
 import ApplicationServices
@@ -59,6 +60,11 @@ class SpotlightWindow: NSWindow {
 @main
 struct liquid_glass_playApp: App {
     @StateObject private var windowManager = WindowManager()
+    
+    init() {
+        // Configure Firebase
+        FirebaseApp.configure()
+    }
     
     var body: some Scene {
         WindowGroup {

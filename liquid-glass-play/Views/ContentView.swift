@@ -24,6 +24,7 @@ struct ContentView: View {
     @StateObject private var screenshotManager = ScreenshotManager() // NEW: Dedicated screenshot manager
     @StateObject private var appSearchManager = AppSearchManager() // NEW: For app launching
     @StateObject private var speechManager = SpeechManager() // NEW: Speech recognition manager
+    @StateObject private var firebaseManager = FirebaseManager() // NEW: Firebase manager
     @State private var showingHotkeyInstructions = false
     @State private var showingUniversalResults = false
     @State private var isCapturingScreenshot = false
@@ -74,6 +75,27 @@ struct ContentView: View {
         .animation(.easeInOut(duration: 0.4), value: showingOnboarding)
         .onAppear {
             checkOnboardingStatus()
+        }
+        .onChange(of: firebaseManager.isAuthenticated) { isAuthenticated in
+            if isAuthenticated {
+                // User just authenticated - hide onboarding
+                withAnimation {
+                    showingOnboarding = false
+                    hasCompletedOnboarding = true
+                    UserDefaults.standard.set(true, forKey: "hasCompletedOnboarding")
+                }
+                
+                // Log app usage
+                Task {
+                    await firebaseManager.logAppUsage()
+                }
+            } else {
+                // User logged out or not authenticated - show onboarding
+                withAnimation {
+                    showingOnboarding = true
+                    hasCompletedOnboarding = false
+                }
+            }
         }
         .onChange(of: windowManager.isFirstLaunch) { isFirstLaunch in
             if isFirstLaunch && !hasCompletedOnboarding {
@@ -641,6 +663,13 @@ struct ContentView: View {
         hasCompletedOnboarding = UserDefaults.standard.bool(forKey: "hasCompletedOnboarding")
         print("🔍 Checking onboarding status: hasCompleted = \(hasCompletedOnboarding)")
         
+        // If user has completed onboarding but is not authenticated, show onboarding again for auth
+        if hasCompletedOnboarding && firebaseManager.requireAuthentication() {
+            print("🔐 User completed onboarding but not authenticated - showing onboarding for auth")
+            hasCompletedOnboarding = false
+            showingOnboarding = true
+        }
+        
         // Note: First launch onboarding is now handled by WindowManager via notification
         // This method just sets the initial state
     }
@@ -789,6 +818,11 @@ struct ContentView: View {
                     aiResponse: resultText,
                     hasImage: hasImage
                 )
+                
+                // Log search query to Firebase (if authenticated)
+                Task {
+                    await firebaseManager.logSearchQuery(userInput)
+                }
                 
                 searchText = ""
             } catch {
@@ -2350,6 +2384,8 @@ struct ContentView: View {
         
         return cleanResponse
     }
+    
+
 }
 
 #Preview {
