@@ -16,7 +16,7 @@ struct OnboardingView: View {
             Color.clear
             
             VStack(spacing: 0) {
-                Spacer()
+                Spacer(minLength: 20)
                 
                 // Main content with enhanced glass transitions
                 ZStack {
@@ -51,7 +51,7 @@ struct OnboardingView: View {
                 }
                 .animation(.spring(response: 0.6, dampingFraction: 0.8), value: currentPage)
                 
-                Spacer()
+                Spacer(minLength: 20)
                 
                 // Apple-style progress dots
                 HStack(spacing: 8) {
@@ -110,8 +110,9 @@ struct OnboardingView: View {
             }
             .padding(.top, 40)
         }
-        .frame(maxWidth: 800, maxHeight: 650)
-        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 28))
+        .frame(minWidth: 600, maxWidth: .infinity, minHeight: 500, maxHeight: .infinity)
+        .frame(idealWidth: 800, idealHeight: 650)
+        .liquidGlassRect(cornerRadius: 28)
         .shadow(color: .black.opacity(0.3), radius: 40, x: 0, y: 20)
         .onAppear {
             // Clean appearance
@@ -129,11 +130,12 @@ struct OnboardingView: View {
     
     private var heroPage: some View {
         VStack(spacing: 32) {
-            // Clean hero icon
+            // Clean hero icon with liquid glass effect
             ZStack {
                 Circle()
-                    .fill(.ultraThinMaterial)
+                    .fill(Color.clear)
                     .frame(width: 120, height: 120)
+                    .liquidGlassRect(cornerRadius: 60)
                     .overlay(
                         Circle()
                             .stroke(.white.opacity(0.2), lineWidth: 1)
@@ -173,7 +175,7 @@ struct OnboardingView: View {
                     .foregroundColor(.secondary)
             }
             
-            // Clean visual demonstration
+            // Clean visual demonstration with liquid glass
             VStack(spacing: 20) {
                 VStack(spacing: 0) {
                     // Header
@@ -190,7 +192,7 @@ struct OnboardingView: View {
                     }
                     .padding(.horizontal, 16)
                     .padding(.vertical, 12)
-                    .background(.ultraThinMaterial)
+                    .liquidGlassRect(cornerRadius: 12)
                     
                     // Search field
                     HStack {
@@ -207,8 +209,8 @@ struct OnboardingView: View {
                     .padding(.horizontal, 16)
                     .padding(.vertical, 16)
                     .background(.regularMaterial)
+                    .clipShape(RoundedRectangle(cornerRadius: 12))
                 }
-                .clipShape(RoundedRectangle(cornerRadius: 12))
                 .frame(width: 340)
                 .shadow(color: .black.opacity(0.2), radius: 20, x: 0, y: 10)
                 
@@ -221,16 +223,17 @@ struct OnboardingView: View {
     }
     
     private var capabilityPage: some View {
-        VStack(spacing: 32) {
+        VStack(spacing: 24) {
             Text("Understands Your Context")
                 .font(.system(size: 32, weight: .semibold))
                 .foregroundColor(.primary)
+                .padding(.top, 10)
             
-            VStack(spacing: 20) {
+            VStack(spacing: 16) {
                 CapabilityRow(
                     icon: "eye",
                     title: "Sees what you're doing",
-                    description: "Takes invisible screenshots to understand your workflow"
+                    description: "AI agent sees what you are doing to understand your workflow"
                 )
                 
                 CapabilityRow(
@@ -245,6 +248,7 @@ struct OnboardingView: View {
                     description: "Automates tasks across your applications"
                 )
             }
+            .padding(.vertical, 8)
             
             HStack {
                 Image(systemName: "checkmark.shield.fill")
@@ -257,14 +261,14 @@ struct OnboardingView: View {
             }
             .padding(.horizontal, 20)
             .padding(.vertical, 12)
-            .background(.ultraThinMaterial)
-            .clipShape(RoundedRectangle(cornerRadius: 20))
+            .liquidGlassRect(cornerRadius: 20)
             .overlay(
                 RoundedRectangle(cornerRadius: 20)
                     .stroke(.green.opacity(0.3), lineWidth: 1)
             )
+            .padding(.bottom, 10)
         }
-        .padding(.horizontal, 50)
+        .padding(.horizontal, 40)
     }
     
     private var startPage: some View {
@@ -273,6 +277,7 @@ struct OnboardingView: View {
                 Circle()
                     .fill(.green.opacity(0.2))
                     .frame(width: 100, height: 100)
+                    .liquidGlassRect(cornerRadius: 50)
                     .overlay(
                         Circle()
                             .stroke(.green.opacity(0.4), lineWidth: 1)
@@ -346,11 +351,12 @@ struct CapabilityRow: View {
     let description: String
     
     var body: some View {
-        HStack(spacing: 16) {
+        HStack(alignment: .top, spacing: 16) {
             ZStack {
                 Circle()
-                    .fill(.ultraThinMaterial)
+                    .fill(Color.clear)
                     .frame(width: 40, height: 40)
+                    .liquidGlassRect(cornerRadius: 20)
                     .overlay(
                         Circle()
                             .stroke(.white.opacity(0.2), lineWidth: 1)
@@ -360,23 +366,30 @@ struct CapabilityRow: View {
                     .font(.system(size: 18, weight: .medium))
                     .foregroundColor(.blue)
             }
+            .frame(width: 40, height: 40)
             
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: 4) {
                 Text(title)
                     .font(.system(size: 17, weight: .medium))
                     .foregroundColor(.primary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.9)
                 
                 Text(description)
                     .font(.system(size: 14, weight: .regular))
                     .foregroundColor(.secondary)
-                    .lineLimit(2)
+                    .lineLimit(3)
+                    .multilineTextAlignment(.leading)
+                    .fixedSize(horizontal: false, vertical: true)
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
             
-            Spacer()
+            Spacer(minLength: 0)
         }
-        .padding(18)
-        .background(.ultraThinMaterial)
-        .clipShape(RoundedRectangle(cornerRadius: 16))
+        .padding(.horizontal, 20)
+        .padding(.vertical, 16)
+        .frame(maxWidth: .infinity, minHeight: 72)
+        .liquidGlassRect(cornerRadius: 16)
         .overlay(
             RoundedRectangle(cornerRadius: 16)
                 .stroke(.white.opacity(0.1), lineWidth: 1)
@@ -386,5 +399,5 @@ struct CapabilityRow: View {
 
 #Preview {
     OnboardingView(isPresented: .constant(true))
-        .frame(width: 600, height: 650)
+        .frame(width: 800, height: 650)
 }

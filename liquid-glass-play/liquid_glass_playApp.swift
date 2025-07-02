@@ -71,7 +71,7 @@ struct liquid_glass_playApp: App {
                 .focusedSceneValue(\.windowManager, windowManager)
         }
         .windowStyle(.hiddenTitleBar)
-        .windowResizability(.contentSize)
+        .windowResizability(.contentMinSize)
         .defaultPosition(.center)
         .defaultSize(width: 640, height: 72)
         .commands {
@@ -93,6 +93,7 @@ struct liquid_glass_playApp: App {
 class WindowManager: NSObject, ObservableObject, NSWindowDelegate {
     @Published var isVisible: Bool = false
     @Published var isConfigured: Bool = false
+    @Published var isFirstLaunch: Bool = false
     private var window: NSWindow?
     private var statusItem: NSStatusItem?
     private var justOpened: Bool = false
@@ -130,11 +131,25 @@ class WindowManager: NSObject, ObservableObject, NSWindowDelegate {
     
     private func checkFirstTimeLaunch() {
         let hasCompletedOnboarding = UserDefaults.standard.bool(forKey: "hasCompletedOnboarding")
+        isFirstLaunch = !hasCompletedOnboarding
+        
         if !hasCompletedOnboarding {
-            // First time launch - show window automatically after a brief delay
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
-                print("🎉 First time launch detected - showing onboarding automatically")
-                self.showWindow()
+            print("🎉 FIRST LAUNCH DETECTED! Setting up onboarding flow...")
+            
+            // First time launch - trigger onboarding after ContentView is ready
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+                print("🎉 First time launch - triggering onboarding automatically")
+                
+                // Ensure window is set up first
+                if self.window == nil {
+                    self.setupWindow()
+                }
+                
+                // Post notification to ContentView to show onboarding
+                NotificationCenter.default.post(name: NSNotification.Name("ShowOnboardingOnFirstLaunch"), object: nil)
+                
+                // Show the window with onboarding size
+                self.showOnboardingWindow()
             }
         }
         // If onboarding is completed, start hidden as usual
@@ -208,6 +223,9 @@ class WindowManager: NSObject, ObservableObject, NSWindowDelegate {
     @objc func resetOnboarding() {
         UserDefaults.standard.removeObject(forKey: "hasCompletedOnboarding")
         UserDefaults.standard.removeObject(forKey: "hotkeyInstructionsShown")
+        
+        // Simulate first launch
+        isFirstLaunch = true
         
         // Show the onboarding again
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
@@ -476,6 +494,35 @@ class WindowManager: NSObject, ObservableObject, NSWindowDelegate {
             let newSize = NSSize(width: 640, height: max(72, height))
             window.setContentSize(newSize)
             self.centerWindow()
+        }
+    }
+    
+    // 🎉 NEW: Handle onboarding window sizing
+    func showOnboardingWindow() {
+        DispatchQueue.main.async { [weak self] in
+            guard let self = self, let window = self.window else { return }
+            
+            // Resize window for onboarding
+            let onboardingSize = NSSize(width: 800, height: 650)
+            window.setContentSize(onboardingSize)
+            self.centerWindow()
+            
+            // Show the window
+            self.forceShowWindow()
+        }
+    }
+    
+    func hideOnboardingWindow() {
+        DispatchQueue.main.async { [weak self] in
+            guard let self = self, let window = self.window else { return }
+            
+            // Reset to normal size
+            let normalSize = NSSize(width: 640, height: 72)
+            window.setContentSize(normalSize)
+            self.centerWindow()
+            
+            // Hide the window
+            self.hideWindow()
         }
     }
     

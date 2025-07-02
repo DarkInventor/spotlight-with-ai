@@ -30,6 +30,11 @@ struct ContentView: View {
     @State private var shouldWriteToApp = false
     @State private var isSpeechMode = false // NEW: Track if speech mode is active
     @Environment(\.colorScheme) private var colorScheme
+    @EnvironmentObject var windowManager: WindowManager
+    
+    // 🎉 NEW: Onboarding state management
+    @State private var showingOnboarding = false
+    @State private var hasCompletedOnboarding = false
     
     // NEW: Response actions structure
     struct ResponseAction: Identifiable, Hashable {
@@ -53,6 +58,60 @@ struct ContentView: View {
     private let model = GenerativeModel(name: "gemini-1.5-flash", apiKey: APIKey.default)
 
     var body: some View {
+        ZStack {
+            // 🎉 Main app content - only show when onboarding is complete
+            if hasCompletedOnboarding && !showingOnboarding {
+                mainContentView
+            }
+            
+            // 🎉 Onboarding overlay - show when needed
+            if showingOnboarding {
+                OnboardingView(isPresented: $showingOnboarding)
+                    .transition(.opacity.combined(with: .scale(scale: 0.95)))
+                    .zIndex(1000) // Ensure onboarding is on top
+            }
+        }
+        .animation(.easeInOut(duration: 0.4), value: showingOnboarding)
+        .onAppear {
+            checkOnboardingStatus()
+        }
+        .onChange(of: windowManager.isFirstLaunch) { isFirstLaunch in
+            if isFirstLaunch && !hasCompletedOnboarding {
+                print("🎉 WindowManager indicates first launch - preparing onboarding")
+                showingOnboarding = true
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("ShowOnboarding"))) { _ in
+            withAnimation {
+                showingOnboarding = true
+                
+                // Resize window for onboarding
+                windowManager.showOnboardingWindow()
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("ShowOnboardingOnFirstLaunch"))) { _ in
+            print("🎉 Received first launch onboarding notification")
+            withAnimation {
+                hasCompletedOnboarding = false
+                showingOnboarding = true
+            }
+        }
+        .onChange(of: showingOnboarding) { isShowing in
+            // When onboarding is dismissed, update the completed status and reset window size
+            if !isShowing {
+                hasCompletedOnboarding = UserDefaults.standard.bool(forKey: "hasCompletedOnboarding")
+                
+                // Mark first launch as complete
+                windowManager.isFirstLaunch = false
+                
+                // Reset window to normal size when onboarding is dismissed
+                windowManager.hideOnboardingWindow()
+            }
+        }
+    }
+    
+    // 🎯 EXTRACTED: Main content view for cleaner code organization
+    private var mainContentView: some View {
         VStack(spacing: 16) {
             VStack(spacing: 8) {
                 // Search bar with screenshot and speech buttons - unified layout
@@ -575,6 +634,25 @@ struct ContentView: View {
         } message: {
             Text("🚀 Press Cmd+Shift+Space from anywhere to open Searchfast!\n\nFor global access, please grant Accessibility permissions:\n\n1. Click 'Open Settings' below\n2. Find 'Searchfast' in the list\n3. Toggle it ON\n\nThis allows the hotkey to work when other apps are focused.")
         }
+    }
+    
+    // 🎉 NEW: Check onboarding status on app appear
+    private func checkOnboardingStatus() {
+        hasCompletedOnboarding = UserDefaults.standard.bool(forKey: "hasCompletedOnboarding")
+        print("🔍 Checking onboarding status: hasCompleted = \(hasCompletedOnboarding)")
+        
+        // Note: First launch onboarding is now handled by WindowManager via notification
+        // This method just sets the initial state
+    }
+    
+    // 🐱 DEBUG: Method to test first launch (remove this in production)
+    private func simulateFirstLaunch() {
+        UserDefaults.standard.removeObject(forKey: "hasCompletedOnboarding")
+        UserDefaults.standard.removeObject(forKey: "hotkeyInstructionsShown")
+        hasCompletedOnboarding = false
+        showingOnboarding = true
+        windowManager.showOnboardingWindow()
+        print("🎯 DEBUG: Simulated first launch - onboarding should show")
     }
 
     private func captureScreenshot() {
