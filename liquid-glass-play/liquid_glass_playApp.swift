@@ -109,7 +109,8 @@ class WindowManager: NSObject, ObservableObject, NSWindowDelegate {
             await requestPermissionsOnStartup()
         }
         
-        // Start hidden - only show when hotkey is pressed
+        // Check if this is first time launch - if so, show window automatically
+        checkFirstTimeLaunch()
     }
     
     @MainActor
@@ -125,6 +126,18 @@ class WindowManager: NSObject, ObservableObject, NSWindowDelegate {
     
     deinit {
         cleanup()
+    }
+    
+    private func checkFirstTimeLaunch() {
+        let hasCompletedOnboarding = UserDefaults.standard.bool(forKey: "hasCompletedOnboarding")
+        if !hasCompletedOnboarding {
+            // First time launch - show window automatically after a brief delay
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
+                print("🎉 First time launch detected - showing onboarding automatically")
+                self.showWindow()
+            }
+        }
+        // If onboarding is completed, start hidden as usual
     }
     
 
@@ -146,6 +159,8 @@ class WindowManager: NSObject, ObservableObject, NSWindowDelegate {
 
         menu.addItem(NSMenuItem(title: "Setup Global Hotkey...", action: #selector(showHotkeyInstructions), keyEquivalent: ""))
         menu.addItem(NSMenuItem(title: "Request Permissions...", action: #selector(requestPermissions), keyEquivalent: ""))
+        menu.addItem(NSMenuItem.separator())
+        menu.addItem(NSMenuItem(title: "Show Onboarding Again", action: #selector(resetOnboarding), keyEquivalent: ""))
         menu.addItem(NSMenuItem.separator())
         menu.addItem(NSMenuItem(title: "Quit Searchfast", action: #selector(quitApp), keyEquivalent: "q"))
         
@@ -187,6 +202,16 @@ class WindowManager: NSObject, ObservableObject, NSWindowDelegate {
             alert.alertStyle = .informational
             alert.addButton(withTitle: "OK")
             alert.runModal()
+        }
+    }
+    
+    @objc func resetOnboarding() {
+        UserDefaults.standard.removeObject(forKey: "hasCompletedOnboarding")
+        UserDefaults.standard.removeObject(forKey: "hotkeyInstructionsShown")
+        
+        // Show the onboarding again
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+            NotificationCenter.default.post(name: NSNotification.Name("ShowOnboarding"), object: nil)
         }
     }
     

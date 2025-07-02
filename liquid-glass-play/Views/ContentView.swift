@@ -444,8 +444,8 @@ struct ContentView: View {
                                             .foregroundColor(.primary)
                                             .padding(.horizontal, 16)
                                             .padding(.vertical, 12)
-                                            .background(Color.gray.opacity(0.1))
-                                            .cornerRadius(12)
+                                            .background(Color.clear)
+                                            .liquidGlassRect(cornerRadius: 12.0)
                                             .overlay(
                                                 RoundedRectangle(cornerRadius: 12)
                                                     .stroke(Color.blue.opacity(0.3), lineWidth: 1)
@@ -495,7 +495,7 @@ struct ContentView: View {
                     print("🎯 ContentView: Received context capture notification for \(app.localizedName ?? "Unknown")")
                     
                     // 🐱 CAT-SAVING: Capture Word cursor position if it's Word
-                    if app.bundleIdentifier == "com.microsoft.Word" || 
+                    if app.bundleIdentifier == "com.microsoft.Word" ||
                        app.localizedName?.lowercased().contains("word") == true {
                         print("📍 🐱 Capturing Word cursor position before switching away!")
                         await automationManager.captureWordCursorPosition()
@@ -671,8 +671,8 @@ struct ContentView: View {
                         throw NSError(domain: "ImageConversion", code: 1, userInfo: [NSLocalizedDescriptionKey: "Failed to convert image"])
                     }
                     
-                    let prompt = userInput.isEmpty ? 
-                        "🚀 I can see your screen! What would you like help with? I can analyze what you're working on and provide specific assistance." : 
+                    let prompt = userInput.isEmpty ?
+                        "🚀 I can see your screen! What would you like help with? I can analyze what you're working on and provide specific assistance." :
                         fullPrompt
                     
                     let imagePart = ModelContent.Part.data(mimetype: "image/jpeg", jpegData)
@@ -978,7 +978,7 @@ struct ContentView: View {
         let isWritingKeyword = writingKeywords.contains { inputLower.contains($0) }
         
         // Always show write button if we have a valid context (unless app is Searchfast)
-        let hasValidContext = contextManager.currentContext?.appName != "Searchfast" && 
+        let hasValidContext = contextManager.currentContext?.appName != "Searchfast" &&
                              contextManager.currentContext?.canWriteIntoApp == true
         
         print("🔍 Writing request check: '\(userInput)'")
@@ -2007,7 +2007,7 @@ struct ContentView: View {
         }
         
         // 🔍 SMART WEB SEARCH DETECTION
-        if responseText.lowercased().contains("search") || responseText.lowercased().contains("google") || 
+        if responseText.lowercased().contains("search") || responseText.lowercased().contains("google") ||
            responseText.lowercased().contains("amazon") || responseText.lowercased().contains("find") {
             
             let searchQuery = extractSearchQuery(from: responseText)
