@@ -1,7 +1,7 @@
 {
   "images" : [
     {
-      "filename" : "search-spot-dark.png",
+      "filename" : "1024x1024.png",
       "idiom" : "universal",
       "platform" : "ios",
       "size" : "1024x1024"
@@ -13,7 +13,7 @@
           "value" : "dark"
         }
       ],
-      "filename" : "search-spot-dark 1.png",
+      "filename" : "1024x1024 1.png",
       "idiom" : "universal",
       "platform" : "ios",
       "size" : "1024x1024"
@@ -25,67 +25,67 @@
           "value" : "tinted"
         }
       ],
-      "filename" : "search-spot-dark 2.png",
+      "filename" : "1024x1024 2.png",
       "idiom" : "universal",
       "platform" : "ios",
       "size" : "1024x1024"
     },
     {
-      "filename" : "search-spot-dark 3.png",
+      "filename" : "16x16.png",
       "idiom" : "mac",
       "scale" : "1x",
       "size" : "16x16"
     },
     {
-      "filename" : "search-spot-dark 4.png",
+      "filename" : "32x32.png",
       "idiom" : "mac",
       "scale" : "2x",
       "size" : "16x16"
     },
     {
-      "filename" : "search-spot-dark 5.png",
+      "filename" : "32x32 1.png",
       "idiom" : "mac",
       "scale" : "1x",
       "size" : "32x32"
     },
     {
-      "filename" : "search-spot-dark 6.png",
+      "filename" : "64x64.png",
       "idiom" : "mac",
       "scale" : "2x",
       "size" : "32x32"
     },
     {
-      "filename" : "search-spot-dark 7.png",
+      "filename" : "128x128.png",
       "idiom" : "mac",
       "scale" : "1x",
       "size" : "128x128"
     },
     {
-      "filename" : "search-spot-dark 8.png",
+      "filename" : "256x256.png",
       "idiom" : "mac",
       "scale" : "2x",
       "size" : "128x128"
     },
     {
-      "filename" : "search-spot-dark 9.png",
+      "filename" : "256x256 1.png",
       "idiom" : "mac",
       "scale" : "1x",
       "size" : "256x256"
     },
     {
-      "filename" : "search-spot-dark 10.png",
+      "filename" : "512x512.png",
       "idiom" : "mac",
       "scale" : "2x",
       "size" : "256x256"
     },
     {
-      "filename" : "search-spot-dark 11.png",
+      "filename" : "512x512 1.png",
       "idiom" : "mac",
       "scale" : "1x",
       "size" : "512x512"
     },
     {
-      "filename" : "search-spot-dark 12.png",
+      "filename" : "1024x1024 3.png",
       "idiom" : "mac",
       "scale" : "2x",
       "size" : "512x512"

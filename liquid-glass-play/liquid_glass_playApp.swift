@@ -10,6 +10,7 @@ import FirebaseCore
 #if canImport(AppKit)
 import AppKit
 import ApplicationServices
+import ServiceManagement
 
 // App delegate to handle background operations
 class AppDelegate: NSObject, NSApplicationDelegate {
@@ -111,25 +112,144 @@ class WindowManager: NSObject, ObservableObject, NSWindowDelegate {
         setupGlobalHotkey()
         setupBackgroundOperation()
         
-        // Request permissions on startup
-        Task { @MainActor in
-            await requestPermissionsOnStartup()
-        }
+        // Permissions are now handled in onboarding flow
         
         // Check if this is first time launch - if so, show window automatically
         checkFirstTimeLaunch()
+        registerForLoginIfNeeded()
+        
+        // Set up periodic check for launch at login status
+        setupLaunchAtLoginMonitoring()
     }
     
-    @MainActor
-    private func requestPermissionsOnStartup() async {
-        print("🚀 Requesting permissions on app startup...")
-        
-        // Create automation manager instance to request permissions
-        let automationManager = AppAutomationManager()
-        await automationManager.requestAllPermissions()
-        
-        print("✅ Startup permission request completed")
+    private func registerForLoginIfNeeded() {
+        let hasCompletedOnboarding = UserDefaults.standard.bool(forKey: "hasCompletedOnboarding")
+        if hasCompletedOnboarding {
+            // Check current status first
+            let currentStatus = SMAppService.mainApp.status
+            print("🔍 Current SMAppService status: \(currentStatus)")
+            
+            switch currentStatus {
+            case .notRegistered:
+                do {
+                    try SMAppService.mainApp.register()
+                    print("🚀 Successfully registered for launch at login.")
+                    
+                    // Verify registration with a more comprehensive check
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+                        self.verifyLaunchAtLoginStatus()
+                    }
+                } catch {
+                    print("❌ Failed to register for launch at login: \(error.localizedDescription)")
+                    // Store the failure for debugging
+                    UserDefaults.standard.set(error.localizedDescription, forKey: "lastRegistrationError")
+                    // Try again in a few seconds with exponential backoff
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 5.0) {
+                        self.retryRegistration()
+                    }
+                }
+                
+            case .notFound:
+                print("⚠️ App service not found - this may be expected in debug builds")
+                // In debug builds, this is normal and we shouldn't retry
+                if !isDebugBuild() {
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 10.0) {
+                        self.retryRegistration()
+                    }
+                }
+                
+            case .enabled:
+                print("✅ Launch at login already enabled")
+                // Clear any previous error
+                UserDefaults.standard.removeObject(forKey: "lastRegistrationError")
+                
+            case .requiresApproval:
+                print("⚠️ Launch at login requires user approval in System Preferences")
+                print("💡 User needs to approve in System Preferences > General > Login Items")
+                
+            @unknown default:
+                print("⚠️ Unknown SMAppService status: \(currentStatus)")
+            }
+        }
     }
+    
+    private func isDebugBuild() -> Bool {
+        #if DEBUG
+        return true
+        #else
+        return false
+        #endif
+    }
+    
+    private func verifyLaunchAtLoginStatus() {
+        let status = SMAppService.mainApp.status
+        print("🔍 Verified SMAppService status: \(status)")
+        
+        if status != .enabled {
+            print("⚠️ Launch at login not properly enabled. Status: \(status)")
+            
+            // Store the registration attempt
+            UserDefaults.standard.set(Date(), forKey: "lastRegistrationAttempt")
+            
+            // If it requires approval, log helpful message
+            if status == .requiresApproval {
+                print("💡 User needs to approve in System Preferences > General > Login Items")
+                // Clear retry count since this is a user action requirement, not a technical failure
+                UserDefaults.standard.removeObject(forKey: "registrationRetryCount")
+            }
+        } else {
+            print("✅ Launch at login successfully verified")
+            // Clear all registration tracking on success
+            UserDefaults.standard.removeObject(forKey: "lastRegistrationAttempt")
+            UserDefaults.standard.removeObject(forKey: "registrationRetryCount")
+            UserDefaults.standard.removeObject(forKey: "lastRegistrationError")
+        }
+    }
+    
+    private func retryRegistration() {
+        // Check if we've tried recently to avoid spam
+        if let lastAttempt = UserDefaults.standard.object(forKey: "lastRegistrationAttempt") as? Date,
+           Date().timeIntervalSince(lastAttempt) < 60 {
+            print("⏰ Skipping registration retry - attempted recently")
+            return
+        }
+        
+        // Implement exponential backoff to prevent too frequent retries
+        let retryCount = UserDefaults.standard.integer(forKey: "registrationRetryCount")
+        let maxRetries = 5
+        
+        if retryCount >= maxRetries {
+            print("❌ Max registration retries reached. Manual intervention may be required.")
+            UserDefaults.standard.set("Max retries reached", forKey: "lastRegistrationError")
+            return
+        }
+        
+        print("🔄 Retrying launch at login registration... (attempt \(retryCount + 1)/\(maxRetries))")
+        UserDefaults.standard.set(retryCount + 1, forKey: "registrationRetryCount")
+        registerForLoginIfNeeded()
+    }
+     
+     private func setupLaunchAtLoginMonitoring() {
+         // Check launch at login status every 10 minutes to ensure it stays enabled
+         Timer.scheduledTimer(withTimeInterval: 600.0, repeats: true) { [weak self] _ in
+             guard let self = self else { return }
+             
+             let hasCompletedOnboarding = UserDefaults.standard.bool(forKey: "hasCompletedOnboarding")
+             guard hasCompletedOnboarding else { return }
+             
+             let status = SMAppService.mainApp.status
+             
+             // If the service becomes disabled or unregistered, try to re-register
+             if status == .notRegistered {
+                 print("🔄 Launch at login became unregistered - attempting to re-register")
+                 self.registerForLoginIfNeeded()
+             } else if status == .requiresApproval {
+                 print("⚠️ Launch at login requires user approval")
+             }
+         }
+     }
+    
+
     
     deinit {
         cleanup()
@@ -143,7 +263,7 @@ class WindowManager: NSObject, ObservableObject, NSWindowDelegate {
             print("🎉 FIRST LAUNCH DETECTED! Setting up onboarding flow...")
             
             // First time launch - trigger onboarding after ContentView is ready
-            DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
                 print("🎉 First time launch - triggering onboarding automatically")
                 
                 // Ensure window is set up first
@@ -180,6 +300,7 @@ class WindowManager: NSObject, ObservableObject, NSWindowDelegate {
 
         menu.addItem(NSMenuItem(title: "Setup Global Hotkey...", action: #selector(showHotkeyInstructions), keyEquivalent: ""))
         menu.addItem(NSMenuItem(title: "Request Permissions...", action: #selector(requestPermissions), keyEquivalent: ""))
+        menu.addItem(NSMenuItem(title: "Check Launch at Login Status", action: #selector(checkLaunchAtLoginStatus), keyEquivalent: ""))
         menu.addItem(NSMenuItem.separator())
         menu.addItem(NSMenuItem(title: "Show Onboarding Again", action: #selector(resetOnboarding), keyEquivalent: ""))
         menu.addItem(NSMenuItem.separator())
@@ -203,18 +324,17 @@ class WindowManager: NSObject, ObservableObject, NSWindowDelegate {
     @objc func requestPermissions() {
         Task { @MainActor in
             print("🔐 Manually requesting permissions...")
-            let automationManager = AppAutomationManager()
-            await automationManager.requestAllPermissions()
+            let permissionManager = PermissionManager()
+            await permissionManager.requestAllPermissions()
             
-            // Check permissions and show alert
-            let result = await automationManager.checkAllPermissions()
+            // Show updated permission status
+            let summary = permissionManager.getPermissionStatusSummary()
             let message = """
             Permission Status:
             
-            Accessibility: \(result.accessibility ? "✅ Granted" : "❌ Not Granted")
-            Automation: \(result.automation ? "✅ Granted" : "❌ Not Granted")
+            \(summary)
             
-            \(result.accessibility && result.automation ? "All permissions granted! Microsoft Word automation should now work." : "Some permissions are missing. Please check System Preferences > Privacy & Security.")
+            \(permissionManager.allPermissionsGranted ? "All required permissions granted! The app should work properly now." : "Some permissions are missing. Please grant them for full functionality.")
             """
             
             let alert = NSAlert()
@@ -230,6 +350,9 @@ class WindowManager: NSObject, ObservableObject, NSWindowDelegate {
         UserDefaults.standard.removeObject(forKey: "hasCompletedOnboarding")
         UserDefaults.standard.removeObject(forKey: "hotkeyInstructionsShown")
         
+        // Switch to regular mode to show onboarding
+        NSApp.setActivationPolicy(.regular)
+        
         // Simulate first launch
         isFirstLaunch = true
         
@@ -239,13 +362,94 @@ class WindowManager: NSObject, ObservableObject, NSWindowDelegate {
         }
     }
     
+    @objc func checkLaunchAtLoginStatus() {
+        let status = SMAppService.mainApp.status
+        let hasCompletedOnboarding = UserDefaults.standard.bool(forKey: "hasCompletedOnboarding")
+        let lastError = UserDefaults.standard.string(forKey: "lastRegistrationError")
+        let retryCount = UserDefaults.standard.integer(forKey: "registrationRetryCount")
+        
+        var message = "Launch at Login Status: "
+        var actionable = false
+        
+        switch status {
+        case .enabled:
+            message += "✅ Enabled\n\nSearchfast will start automatically when you restart your Mac."
+            if retryCount > 0 {
+                message += "\n\n✅ Previous registration issues have been resolved."
+            }
+        case .notRegistered:
+            message += "❌ Not Registered\n\nSearchfast will not start automatically after restart."
+            if let error = lastError {
+                message += "\n\n⚠️ Last error: \(error)"
+            }
+            if retryCount > 0 {
+                message += "\n\nRetry attempts: \(retryCount)/5"
+            }
+            actionable = hasCompletedOnboarding
+        case .requiresApproval:
+            message += "⚠️ Requires Approval\n\nSearchfast needs your permission to start automatically."
+            message += "\n\nTo approve:"
+            message += "\n1. Open System Preferences/Settings"
+            message += "\n2. Go to General → Login Items"
+            message += "\n3. Find 'Searchfast' and ensure it's enabled"
+            message += "\n\nAlternatively, click 'Open System Preferences' below."
+        case .notFound:
+            if isDebugBuild() {
+                message += "⚠️ Service Not Found\n\nThis is expected in debug builds. Launch at login will work in the release version."
+            } else {
+                message += "❌ Service Not Found\n\nThere may be an issue with the app installation. Try reinstalling the app."
+            }
+        @unknown default:
+            message += "❓ Unknown Status: \(status)\n\nThis is an unexpected status. Please report this issue."
+        }
+        
+        let alert = NSAlert()
+        alert.messageText = "Launch at Login Status"
+        alert.informativeText = message
+        alert.alertStyle = .informational
+        
+        if actionable {
+            alert.addButton(withTitle: "Enable Launch at Login")
+            alert.addButton(withTitle: "OK")
+            
+            let response = alert.runModal()
+            if response == .alertFirstButtonReturn {
+                // Reset retry count when user manually tries
+                UserDefaults.standard.removeObject(forKey: "registrationRetryCount")
+                registerForLoginIfNeeded()
+            }
+        } else if status == .requiresApproval {
+            alert.addButton(withTitle: "Open System Preferences")
+            alert.addButton(withTitle: "OK")
+            
+            let response = alert.runModal()
+            if response == .alertFirstButtonReturn {
+                // Open System Preferences to Login Items
+                if let url = URL(string: "x-apple.systempreferences:com.apple.preference.general") {
+                    NSWorkspace.shared.open(url)
+                }
+            }
+        } else {
+            alert.addButton(withTitle: "OK")
+            alert.runModal()
+        }
+    }
+    
     @objc func quitApp() {
         NSApplication.shared.terminate(nil)
     }
     
     private func setupBackgroundOperation() {
-        // Configure app to run in background
+        // Only set accessory mode if onboarding is completed
+        let hasCompletedOnboarding = UserDefaults.standard.bool(forKey: "hasCompletedOnboarding")
+        if hasCompletedOnboarding {
+            // Configure app to run in background only after onboarding
         NSApp.setActivationPolicy(.accessory) // This makes the app not appear in the dock
+        } else {
+            // Keep regular mode for first launch to show onboarding
+            print("🎉 First launch - keeping regular activation policy for onboarding")
+            NSApp.setActivationPolicy(.regular)
+        }
         
         // Handle app becoming active/inactive
         NotificationCenter.default.addObserver(
@@ -317,6 +521,7 @@ class WindowManager: NSObject, ObservableObject, NSWindowDelegate {
         justOpened = true
         
         // Force the app to become active and bring window to front
+        // Temporarily switch to regular mode to show window
         NSApp.setActivationPolicy(.regular)
         NSApp.activate(ignoringOtherApps: true)
         
@@ -485,6 +690,12 @@ class WindowManager: NSObject, ObservableObject, NSWindowDelegate {
         // Reset window level to normal floating
         window.level = .floating
         window.orderOut(nil)
+        
+        // Switch back to accessory mode if onboarding is completed
+        let hasCompletedOnboarding = UserDefaults.standard.bool(forKey: "hasCompletedOnboarding")
+        if hasCompletedOnboarding {
+            NSApp.setActivationPolicy(.accessory)
+        }
         
         // Clear search when hiding
         NotificationCenter.default.post(name: NSNotification.Name("ClearSearch"), object: nil)

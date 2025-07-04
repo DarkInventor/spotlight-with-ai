@@ -1,4 +1,6 @@
 import SwiftUI
+import ApplicationServices
+import ServiceManagement
 
 struct OnboardingView: View {
     @Binding var isPresented: Bool
@@ -8,6 +10,7 @@ struct OnboardingView: View {
     @Environment(\.colorScheme) private var colorScheme
     @Namespace private var heroNamespace
     @StateObject private var firebaseManager = FirebaseManager()
+    @StateObject private var permissionManager = PermissionManager()
     
     // User input fields
     @State private var userName = ""
@@ -17,8 +20,8 @@ struct OnboardingView: View {
     @State private var showingAuthError = false
     
     private var totalPages: Int {
-        // If user is authenticated, show only 2 pages (welcome back + start)
-        return firebaseManager.isAuthenticated ? 2 : 5
+        // If user is authenticated, show reduced flow: welcome back + permissions + start
+        return firebaseManager.isAuthenticated ? 3 : 6
     }
     
     var body: some View {
@@ -69,11 +72,12 @@ struct OnboardingView: View {
                         }
                         .frame(maxWidth: 280)
                         .frame(height: 50)
-                        .background(Color.blue)
+                        .background(getButtonColor())
                         .clipShape(RoundedRectangle(cornerRadius: 25))
-                        .shadow(color: .blue.opacity(0.3), radius: 15, x: 0, y: 8)
+                        .shadow(color: getButtonColor().opacity(0.3), radius: 15, x: 0, y: 8)
                     }
                     .buttonStyle(.borderless)
+                    .disabled(!canProceed())
                     .scaleEffect(showFinalAnimation ? 1.05 : 1.0)
                     .animation(
                         .spring(response: 0.3, dampingFraction: 0.6)
@@ -103,7 +107,10 @@ struct OnboardingView: View {
         .liquidGlassRect(cornerRadius: 28)
         .shadow(color: .black.opacity(0.3), radius: 40, x: 0, y: 20)
         .onAppear {
-            // Clean appearance
+            // Start permission checking
+            Task {
+                await permissionManager.checkAllPermissions()
+            }
         }
         .onChange(of: currentPage) { newValue in
             if newValue == totalPages - 1 {
@@ -112,6 +119,30 @@ struct OnboardingView: View {
                 }
             }
         }
+    }
+    
+    // MARK: - Helper Functions
+    
+    private func canProceed() -> Bool {
+        if firebaseManager.isAuthenticated {
+            switch currentPage {
+            case 1: // Permissions page
+                return permissionManager.allPermissionsGranted
+            default:
+                return true
+            }
+        } else {
+            switch currentPage {
+            case 4: // Permissions page for new users
+                return permissionManager.allPermissionsGranted
+            default:
+                return true
+            }
+        }
+    }
+    
+    private func getButtonColor() -> Color {
+        return canProceed() ? .blue : .gray
     }
     
     // MARK: - Current Page Logic
@@ -124,6 +155,8 @@ struct OnboardingView: View {
             case 0:
                 authPage // Welcome back page
             case 1:
+                permissionsPage
+            case 2:
                 startPage
             default:
                 authPage
@@ -140,9 +173,143 @@ struct OnboardingView: View {
             case 3:
                 authPage
             case 4:
+                permissionsPage
+            case 5:
                 startPage
             default:
                 heroPage
+            }
+        }
+    }
+    
+    // MARK: - Permission Page
+    
+    private var permissionsPage: some View {
+        VStack(spacing: 24) {
+            VStack(spacing: 16) {
+                Image(systemName: "shield.checkered")
+                    .font(.system(size: 60, weight: .light))
+                    .foregroundColor(.blue)
+                
+                Text("Setup Permissions")
+                    .font(.system(size: 32, weight: .semibold))
+                    .foregroundColor(.primary)
+                
+                Text("SearchFast needs these permissions to work properly")
+                    .font(.system(size: 18, weight: .regular))
+                    .foregroundColor(.secondary)
+                    .multilineTextAlignment(.center)
+            }
+            
+            VStack(spacing: 16) {
+                PermissionRow(
+                    icon: "hand.raised.fill",
+                    title: "Accessibility Access",
+                    description: "Required for global shortcuts (⌘+Shift+Space) and app automation",
+                    status: permissionManager.accessibilityPermission,
+                    isRequired: true
+                ) {
+                    Task {
+                        await permissionManager.requestAccessibilityPermission()
+                    }
+                }
+                
+                PermissionRow(
+                    icon: "camera.fill",
+                    title: "Screen Recording",
+                    description: "Lets SearchFast see your screen for intelligent context",
+                    status: permissionManager.screenRecordingPermission,
+                    isRequired: true
+                ) {
+                    Task {
+                        await permissionManager.requestScreenRecordingPermission()
+                    }
+                }
+                
+                PermissionRow(
+                    icon: "mic.fill",
+                    title: "Microphone Access",
+                    description: "Enables voice commands and speech-to-text",
+                    status: permissionManager.microphonePermission,
+                    isRequired: false
+                ) {
+                    Task {
+                        await permissionManager.requestMicrophonePermission()
+                    }
+                }
+                
+                PermissionRow(
+                    icon: "gearshape.2.fill",
+                    title: "App Automation",
+                    description: "Allows automation of other apps like Word, Chrome, etc.",
+                    status: permissionManager.automationPermission,
+                    isRequired: false
+                ) {
+                    Task {
+                        await permissionManager.requestAutomationPermission()
+                    }
+                }
+            }
+            
+            if !permissionManager.allPermissionsGranted {
+                VStack(spacing: 12) {
+                    HStack {
+                        Image(systemName: "exclamationmark.triangle.fill")
+                            .font(.system(size: 16, weight: .medium))
+                            .foregroundColor(.orange)
+                        
+                        Text("Some permissions are missing")
+                            .font(.system(size: 15, weight: .medium))
+                            .foregroundColor(.primary)
+                    }
+                    
+                    Text("Click the buttons above or grant permissions manually in System Preferences > Privacy & Security")
+                        .font(.system(size: 13, weight: .regular))
+                        .foregroundColor(.secondary)
+                        .multilineTextAlignment(.center)
+                    
+                    Button("Open System Preferences") {
+                        if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security") {
+                            NSWorkspace.shared.open(url)
+                        }
+                    }
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundColor(.blue)
+                    .buttonStyle(.plain)
+                }
+                .padding(.horizontal, 20)
+                .padding(.vertical, 16)
+                .background(Color.orange.opacity(0.1))
+                .clipShape(RoundedRectangle(cornerRadius: 12))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 12)
+                        .stroke(.orange.opacity(0.3), lineWidth: 1)
+                )
+            } else {
+                HStack {
+                    Image(systemName: "checkmark.shield.fill")
+                        .font(.system(size: 16, weight: .medium))
+                        .foregroundColor(.green)
+                    
+                    Text("All permissions granted! Ready to go.")
+                        .font(.system(size: 15, weight: .medium))
+                        .foregroundColor(.primary)
+                }
+                .padding(.horizontal, 20)
+                .padding(.vertical, 12)
+                .background(Color.green.opacity(0.1))
+                .clipShape(RoundedRectangle(cornerRadius: 12))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 12)
+                        .stroke(.green.opacity(0.3), lineWidth: 1)
+                )
+            }
+        }
+        .padding(.horizontal, 40)
+        .onAppear {
+            // Refresh permission status when page appears
+            Task {
+                await permissionManager.checkAllPermissions()
             }
         }
     }
@@ -609,17 +776,45 @@ struct OnboardingView: View {
     
     private func getButtonText() -> String {
         if firebaseManager.isAuthenticated {
-            // For authenticated users
-            return currentPage == 0 ? "Continue" : "Start Using App"
+            // For authenticated users (0: welcome back, 1: permissions, 2: start)
+            switch currentPage {
+            case 0:
+                return "Continue"
+            case 1:
+                return permissionManager.allPermissionsGranted ? "Continue" : "Grant Permissions"
+            case 2:
+                return "Start Using App"
+            default:
+                return "Continue"
+            }
         } else {
-            // For new users
-            return currentPage == totalPages - 1 ? "Get Started" : "Continue"
+            // For new users (0: hero, 1: visual, 2: capability, 3: auth, 4: permissions, 5: start)
+            switch currentPage {
+            case 0, 1, 2:
+                return "Continue"
+            case 3:
+                return "Continue"
+            case 4:
+                return permissionManager.allPermissionsGranted ? "Continue" : "Grant Permissions"
+            case 5:
+                return "Get Started"
+            default:
+                return "Continue"
+            }
         }
     }
     
     private func nextPage() {
         if firebaseManager.isAuthenticated {
             // For authenticated users - simplified flow
+            if currentPage == 1 && !permissionManager.allPermissionsGranted {
+                // On permissions page but not all permissions granted
+                Task {
+                    await permissionManager.requestAllPermissions()
+                }
+                return
+            }
+            
             if currentPage < totalPages - 1 {
                 withAnimation(.spring(response: 0.5, dampingFraction: 0.8)) {
                     currentPage += 1
@@ -631,6 +826,14 @@ struct OnboardingView: View {
             // For new users - full flow with authentication
             if currentPage == 3 {
                 handleAuthentication()
+                return
+            }
+            
+            if currentPage == 4 && !permissionManager.allPermissionsGranted {
+                // On permissions page but not all permissions granted
+                Task {
+                    await permissionManager.requestAllPermissions()
+                }
                 return
             }
             
@@ -700,6 +903,18 @@ struct OnboardingView: View {
     
     private func completeOnboarding() {
         UserDefaults.standard.set(true, forKey: "hasCompletedOnboarding")
+        
+        // Register for launch at login
+        do {
+            try SMAppService.mainApp.register()
+            print("🚀 Successfully registered for launch at login.")
+        } catch {
+            print("❌ Failed to register for launch at login: \(error.localizedDescription)")
+        }
+        
+        // Switch to background mode now that onboarding is complete
+        NSApp.setActivationPolicy(.accessory)
+        print("🔄 Onboarding complete - switching to background mode")
         
         // After onboarding is complete, trigger hotkey instructions
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
@@ -800,6 +1015,131 @@ struct CompactCapabilityRow: View {
             RoundedRectangle(cornerRadius: 12)
                 .stroke(.white.opacity(0.1), lineWidth: 1)
         )
+    }
+}
+
+struct PermissionRow: View {
+    let icon: String
+    let title: String
+    let description: String
+    let status: PermissionStatus
+    let isRequired: Bool
+    let action: () -> Void
+    
+    var body: some View {
+        HStack(alignment: .top, spacing: 16) {
+            ZStack {
+                Circle()
+                    .fill(Color.clear)
+                    .frame(width: 40, height: 40)
+                    .liquidGlassRect(cornerRadius: 20)
+                    .overlay(
+                        Circle()
+                            .stroke(statusColor.opacity(0.3), lineWidth: 1)
+                    )
+                
+                Image(systemName: icon)
+                    .font(.system(size: 16, weight: .medium))
+                    .foregroundColor(statusColor)
+            }
+            
+            VStack(alignment: .leading, spacing: 8) {
+                HStack {
+                    Text(title)
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundColor(.primary)
+                    
+                    if isRequired {
+                        Text("REQUIRED")
+                            .font(.system(size: 10, weight: .bold))
+                            .foregroundColor(.white)
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 2)
+                            .background(Color.red)
+                            .clipShape(RoundedRectangle(cornerRadius: 4))
+                    }
+                    
+                    Spacer()
+                    
+                    statusIndicator
+                }
+                
+                Text(description)
+                    .font(.system(size: 13, weight: .regular))
+                    .foregroundColor(.secondary)
+                    .multilineTextAlignment(.leading)
+                
+                if status != .granted {
+                    Button(action: action) {
+                        HStack(spacing: 6) {
+                            Image(systemName: "hand.raised.fill")
+                                .font(.system(size: 12, weight: .medium))
+                            Text("Grant Permission")
+                                .font(.system(size: 13, weight: .medium))
+                        }
+                        .foregroundColor(.white)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 6)
+                        .background(Color.blue)
+                        .clipShape(RoundedRectangle(cornerRadius: 8))
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+        }
+        .padding(.horizontal, 20)
+        .padding(.vertical, 16)
+        .liquidGlassRect(cornerRadius: 16)
+        .overlay(
+            RoundedRectangle(cornerRadius: 16)
+                .stroke(statusColor.opacity(0.2), lineWidth: 1)
+        )
+    }
+    
+    private var statusColor: Color {
+        switch status {
+        case .granted:
+            return .green
+        case .denied:
+            return .red
+        case .notDetermined:
+            return .orange
+        }
+    }
+    
+    @ViewBuilder
+    private var statusIndicator: some View {
+        HStack(spacing: 4) {
+            Image(systemName: statusIcon)
+                .font(.system(size: 12, weight: .bold))
+                .foregroundColor(statusColor)
+            
+            Text(statusText)
+                .font(.system(size: 12, weight: .medium))
+                .foregroundColor(statusColor)
+        }
+    }
+    
+    private var statusIcon: String {
+        switch status {
+        case .granted:
+            return "checkmark.circle.fill"
+        case .denied:
+            return "xmark.circle.fill"
+        case .notDetermined:
+            return "questionmark.circle.fill"
+        }
+    }
+    
+    private var statusText: String {
+        switch status {
+        case .granted:
+            return "Granted"
+        case .denied:
+            return "Denied"
+        case .notDetermined:
+            return "Not Set"
+        }
     }
 }
 
