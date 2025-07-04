@@ -63,8 +63,14 @@ struct liquid_glass_playApp: App {
     @StateObject private var windowManager = WindowManager()
     
     init() {
-        // Configure Firebase
+        // Configure Firebase with error handling
+        do {
         FirebaseApp.configure()
+            print("✅ Firebase configured successfully")
+        } catch {
+            print("⚠️ Firebase configuration failed: \(error.localizedDescription)")
+            // Continue without Firebase rather than crash
+        }
     }
     
     var body: some Scene {
@@ -104,10 +110,26 @@ class WindowManager: NSObject, ObservableObject, NSWindowDelegate {
     private var window: NSWindow?
     private var statusItem: NSStatusItem?
     private var justOpened: Bool = false
+    
+    // CRITICAL: Track event monitors to prevent keyboard blocking
+    private var globalKeyMonitor: Any?
+    private var localKeyMonitor: Any?
+    private var globalMouseMonitor: Any?
+    private var escapeKeyMonitor: Any?
+    private var isInitialized: Bool = false
 
     
     override init() {
         super.init()
+        
+        // Mark as NOT initialized until everything is ready
+        isInitialized = false
+        
+        do {
+            // Clean up any existing monitors first
+            cleanup()
+            
+            // Robust initialization with error handling
         setupMenuBarIcon()
         setupGlobalHotkey()
         setupBackgroundOperation()
@@ -117,9 +139,61 @@ class WindowManager: NSObject, ObservableObject, NSWindowDelegate {
         // Check if this is first time launch - if so, show window automatically
         checkFirstTimeLaunch()
         registerForLoginIfNeeded()
-        
-        // Set up periodic check for launch at login status
-        setupLaunchAtLoginMonitoring()
+            
+            // Set up periodic check for launch at login status
+            setupLaunchAtLoginMonitoring()
+            
+            // Add crash detection and recovery
+            setupCrashRecovery()
+            
+            // Set up periodic health check
+            setupHealthCheck()
+            
+            print("✅ WindowManager initialized successfully")
+            
+            // Only mark as initialized if everything succeeded
+            isInitialized = true
+        } catch {
+            print("❌ CRITICAL: WindowManager initialization failed: \(error)")
+            cleanup()
+            // Keep isInitialized as false
+        }
+    }
+    
+    private func setupHealthCheck() {
+        // Check app health every 30 seconds
+        Timer.scheduledTimer(withTimeInterval: 30.0, repeats: true) { [weak self] timer in
+            guard let self = self else {
+                timer.invalidate()
+                return
+            }
+            
+            // Check for broken states
+            let hasWindow = self.window != nil
+            let hasKeyMonitors = self.globalKeyMonitor != nil || self.localKeyMonitor != nil
+            let isInitializedProperly = self.isInitialized
+            
+            print("🏥 Health Check - Window: \(hasWindow), Monitors: \(hasKeyMonitors), Initialized: \(isInitializedProperly)")
+            
+            // Detect and fix broken states
+            if hasKeyMonitors && !hasWindow {
+                print("🚨 HEALTH CHECK: Detected keyboard monitors without window - cleaning up")
+                self.cleanup()
+            }
+            
+            if !isInitializedProperly && hasKeyMonitors {
+                print("🚨 HEALTH CHECK: Detected monitors while not initialized - cleaning up")
+                self.cleanup()
+            }
+            
+            // If window exists but app isn't properly initialized, reinitialize
+            if hasWindow && !isInitializedProperly {
+                print("🚨 HEALTH CHECK: Window exists but not initialized - attempting recovery")
+                self.cleanup()
+                self.setupWindow()
+                self.isInitialized = true
+            }
+        }
     }
     
     private func registerForLoginIfNeeded() {
@@ -131,15 +205,15 @@ class WindowManager: NSObject, ObservableObject, NSWindowDelegate {
             
             switch currentStatus {
             case .notRegistered:
-                do {
-                    try SMAppService.mainApp.register()
+                 do {
+                     try SMAppService.mainApp.register()
                     print("🚀 Successfully registered for launch at login.")
                     
                     // Verify registration with a more comprehensive check
                     DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
                         self.verifyLaunchAtLoginStatus()
                     }
-                } catch {
+                 } catch {
                     print("❌ Failed to register for launch at login: \(error.localizedDescription)")
                     // Store the failure for debugging
                     UserDefaults.standard.set(error.localizedDescription, forKey: "lastRegistrationError")
@@ -203,7 +277,7 @@ class WindowManager: NSObject, ObservableObject, NSWindowDelegate {
             UserDefaults.standard.removeObject(forKey: "lastRegistrationAttempt")
             UserDefaults.standard.removeObject(forKey: "registrationRetryCount")
             UserDefaults.standard.removeObject(forKey: "lastRegistrationError")
-        }
+                 }
     }
     
     private func retryRegistration() {
@@ -245,13 +319,14 @@ class WindowManager: NSObject, ObservableObject, NSWindowDelegate {
                  self.registerForLoginIfNeeded()
              } else if status == .requiresApproval {
                  print("⚠️ Launch at login requires user approval")
-             }
-         }
-     }
+            }
+        }
+    }
     
 
     
     deinit {
+        print("🧹 WindowManager deinitializing - cleaning up event monitors")
         cleanup()
     }
     
@@ -284,32 +359,34 @@ class WindowManager: NSObject, ObservableObject, NSWindowDelegate {
 
     
     private func setupMenuBarIcon() {
-        statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
+        // Remove any existing status item first
+        if let currentStatusItem = statusItem {
+            NSStatusBar.system.removeStatusItem(currentStatusItem)
+        }
+        
+        // Create new status item
+        statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         
         if let button = statusItem?.button {
-            button.image = NSImage(systemSymbolName: "magnifyingglass", accessibilityDescription: "AI Spotlight")
-            button.action = #selector(toggleWindow)
-            button.target = self
-            button.toolTip = "Searchfast - Cmd+Shift+Space to toggle, Cmd+J to close"
+            button.image = NSImage(systemSymbolName: "magnifyingglass", accessibilityDescription: "SearchFast")
         }
         
-        // Add menu to status item
+        // Create menu
         let menu = NSMenu()
-        menu.addItem(NSMenuItem(title: "Show AI Spotlight", action: #selector(showWindowFromMenu), keyEquivalent: ""))
+        
+        // Add emergency quit option at the top
+        let emergencyQuitItem = NSMenuItem(title: "Force Quit (Emergency)", action: #selector(emergencyQuit), keyEquivalent: "")
+        emergencyQuitItem.keyEquivalentModifierMask = [.command, .option, .shift]
+        emergencyQuitItem.keyEquivalent = "q"
+        menu.addItem(emergencyQuitItem)
+        
         menu.addItem(NSMenuItem.separator())
 
-        menu.addItem(NSMenuItem(title: "Setup Global Hotkey...", action: #selector(showHotkeyInstructions), keyEquivalent: ""))
-        menu.addItem(NSMenuItem(title: "Request Permissions...", action: #selector(requestPermissions), keyEquivalent: ""))
+        // Add regular menu items
+        menu.addItem(NSMenuItem(title: "Show SearchFast", action: #selector(toggleWindow), keyEquivalent: ""))
         menu.addItem(NSMenuItem(title: "Check Launch at Login Status", action: #selector(checkLaunchAtLoginStatus), keyEquivalent: ""))
         menu.addItem(NSMenuItem.separator())
-        menu.addItem(NSMenuItem(title: "Show Onboarding Again", action: #selector(resetOnboarding), keyEquivalent: ""))
-        menu.addItem(NSMenuItem.separator())
-        menu.addItem(NSMenuItem(title: "Quit Searchfast", action: #selector(quitApp), keyEquivalent: "q"))
-        
-        // Set target for menu items
-        for item in menu.items {
-            item.target = self
-        }
+        menu.addItem(NSMenuItem(title: "Quit", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q"))
         
         statusItem?.menu = menu
     }
@@ -405,7 +482,7 @@ class WindowManager: NSObject, ObservableObject, NSWindowDelegate {
         
         let alert = NSAlert()
         alert.messageText = "Launch at Login Status"
-        alert.informativeText = message
+        alert.informativeText = message + "\n\n🆘 Emergency Info:\nIf SearchFast becomes unresponsive and blocks keyboard input, press Cmd+Option+Shift+Q to force quit and restore keyboard control."
         alert.alertStyle = .informational
         
         if actionable {
@@ -473,6 +550,11 @@ class WindowManager: NSObject, ObservableObject, NSWindowDelegate {
     }
     
     @objc func toggleWindow() {
+        guard isInitialized else {
+            print("⚠️ SAFETY: Cannot toggle window - WindowManager not initialized")
+            return
+        }
+        
         if isVisible {
             hideWindow()
         } else {
@@ -481,10 +563,15 @@ class WindowManager: NSObject, ObservableObject, NSWindowDelegate {
     }
     
     func forceShowWindow() {
+        guard isInitialized else {
+            print("⚠️ SAFETY: Cannot show window - WindowManager not initialized")
+            return
+        }
+        
         guard let window = window else {
             print("❌ No window available - setting up window first")
             setupWindow()
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
                 self.forceShowWindow()
             }
             return
@@ -579,6 +666,15 @@ class WindowManager: NSObject, ObservableObject, NSWindowDelegate {
             return 
         }
         
+        guard isInitialized else {
+            print("⚠️ Cannot setup window - WindowManager not fully initialized")
+            // Retry after initialization completes
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                self.setupWindow()
+            }
+            return 
+        }
+        
         DispatchQueue.main.async { [weak self] in
             guard let self = self else { return }
             
@@ -595,7 +691,11 @@ class WindowManager: NSObject, ObservableObject, NSWindowDelegate {
                 $0.contentView != nil && 
                 !($0 is SpotlightWindow && $0 == self.window)
             }) else {
-                print("❌ No suitable window found for setup")
+                print("❌ No suitable window found for setup - will retry")
+                // Retry window setup after a delay
+                DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+                    self.setupWindow()
+                }
                 return
             }
             
@@ -760,9 +860,20 @@ class WindowManager: NSObject, ObservableObject, NSWindowDelegate {
     }
     
     private func setupClickOutsideMonitoring() {
+        // Clean up existing monitor first
+        if let monitor = globalMouseMonitor {
+            NSEvent.removeMonitor(monitor)
+            globalMouseMonitor = nil
+        }
+        
         // Monitor global mouse clicks to hide window when clicking outside
-        NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) { [weak self] event in
-            if let window = self?.window, self?.isVisible == true {
+        globalMouseMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) { [weak self] event in
+            guard let self = self, self.isInitialized else { 
+                print("⚠️ Ignoring mouse event - WindowManager not fully initialized")
+                return 
+            }
+            
+            if let window = self.window, self.isVisible == true {
                 let clickLocation = event.locationInWindow
                 let windowFrame = window.frame
                 
@@ -776,11 +887,17 @@ class WindowManager: NSObject, ObservableObject, NSWindowDelegate {
                     // Check if click is outside our window
                     if !windowFrame.contains(screenClickLocation) {
                         DispatchQueue.main.async {
-                            self?.hideWindow()
+                            self.hideWindow()
                         }
                     }
                 }
             }
+        }
+        
+        if globalMouseMonitor != nil {
+            print("✅ Global mouse monitor set up successfully")
+        } else {
+            print("❌ Failed to set up global mouse monitor")
         }
     }
     
@@ -805,11 +922,37 @@ class WindowManager: NSObject, ObservableObject, NSWindowDelegate {
     }
     
     private func setupGlobalMonitoring() {
-        NSEvent.addGlobalMonitorForEvents(matching: [.keyDown]) { [weak self] event in
+        // Clean up existing monitor first - CRITICAL to prevent keyboard blocking
+        if let monitor = globalKeyMonitor {
+            NSEvent.removeMonitor(monitor)
+            globalKeyMonitor = nil
+            print("🧹 Cleaned up existing global key monitor")
+        }
+        
+        globalKeyMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.keyDown]) { [weak self] event in
+            guard let self = self, self.isInitialized else { 
+                print("⚠️ CRITICAL: Ignoring global key event - WindowManager not initialized. This prevents keyboard blocking!")
+                return 
+            }
+            
+            // Add safety check to ensure we don't block if window is nil
+            guard self.window != nil else {
+                print("⚠️ SAFETY: No window available - ignoring global hotkey to prevent system freeze")
+                return
+            }
+            
             if event.modifierFlags.contains([.command, .shift]) && event.keyCode == 49 { // Cmd+Shift+Space
+                print("🔥 GLOBAL HOTKEY PRESSED! Checking system health...")
+                
+                // Safety check before processing
+                guard self.isInitialized && self.window != nil else {
+                    print("❌ SAFETY ABORT: App not ready for hotkey processing")
+                    return
+                }
+                
                 // CAPTURE CONTEXT IMMEDIATELY when hotkey is pressed, before window shows
                 let currentApp = NSWorkspace.shared.frontmostApplication
-                print("🔥 HOTKEY PRESSED! Current frontmost app: \(currentApp?.localizedName ?? "Unknown")")
+                print("🎯 Current frontmost app: \(currentApp?.localizedName ?? "Unknown")")
                 
                 // Store the context immediately
                 NotificationCenter.default.post(
@@ -818,21 +961,45 @@ class WindowManager: NSObject, ObservableObject, NSWindowDelegate {
                 )
                 
                 DispatchQueue.main.async {
-                    self?.toggleWindow()
+                    self.toggleWindow()
                 }
             } else if event.modifierFlags.contains(.command) && event.keyCode == 38 { // Cmd+J
-                if self?.isVisible == true {
+                if self.isVisible == true {
                     DispatchQueue.main.async {
-                        self?.hideWindow()
+                        self.hideWindow()
                     }
                 }
             }
         }
+        
+        if globalKeyMonitor != nil {
+            print("✅ Global key monitor set up successfully with safety checks")
+        } else {
+            print("❌ CRITICAL: Failed to set up global key monitor")
+        }
     }
     
     private func setupLocalHotkey() {
-        NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
+        // Clean up existing local monitor
+        if let monitor = localKeyMonitor {
+            NSEvent.removeMonitor(monitor)
+            localKeyMonitor = nil
+            print("🧹 Cleaned up existing local key monitor")
+        }
+        
+        localKeyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
+            guard let self = self, self.isInitialized else { 
+                print("⚠️ Ignoring local key event - WindowManager not initialized")
+                return event // Don't consume event if not ready
+            }
+            
             if event.modifierFlags.contains([.command, .shift]) && event.keyCode == 49 { // Cmd+Shift+Space
+                // Safety check before processing
+                guard self.window != nil else {
+                    print("⚠️ SAFETY: Local hotkey ignored - no window available")
+                    return event
+                }
+                
                 // CAPTURE CONTEXT IMMEDIATELY when hotkey is pressed, before window shows
                 let currentApp = NSWorkspace.shared.frontmostApplication
                 print("🔥 LOCAL HOTKEY PRESSED! Current frontmost app: \(currentApp?.localizedName ?? "Unknown")")
@@ -844,30 +1011,53 @@ class WindowManager: NSObject, ObservableObject, NSWindowDelegate {
                 )
                 
                 DispatchQueue.main.async {
-                    self?.toggleWindow()
+                    self.toggleWindow()
                 }
                 return nil // Consume the event
             } else if event.modifierFlags.contains(.command) && event.keyCode == 38 { // Cmd+J
-                if self?.isVisible == true {
+                if self.isVisible == true {
                     DispatchQueue.main.async {
-                        self?.hideWindow()
+                        self.hideWindow()
                     }
                     return nil // Consume the event
                 }
             }
             return event
         }
+        
+        if localKeyMonitor != nil {
+            print("✅ Local key monitor set up successfully")
+        } else {
+            print("❌ Failed to set up local key monitor")
+        }
     }
     
 
     
     private func setupEscapeKeyMonitor() {
-        NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
-            if event.keyCode == 53 && self?.isVisible == true { // Escape key
-                self?.hideWindow()
+        // Clean up existing escape monitor
+        if let monitor = escapeKeyMonitor {
+            NSEvent.removeMonitor(monitor)
+            escapeKeyMonitor = nil
+            print("🧹 Cleaned up existing escape key monitor")
+        }
+        
+        escapeKeyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
+            guard let self = self, self.isInitialized else { 
+                return event // Don't consume if not ready
+            }
+            
+            if event.keyCode == 53 && self.isVisible == true { // Escape key
+                self.hideWindow()
                 return nil // Consume the event
             }
             return event
+        }
+        
+        if escapeKeyMonitor != nil {
+            print("✅ Escape key monitor set up successfully")
+        } else {
+            print("❌ Failed to set up escape key monitor")
         }
     }
     
@@ -940,9 +1130,107 @@ class WindowManager: NSObject, ObservableObject, NSWindowDelegate {
     }
     
     private func cleanup() {
-        if let statusItem = statusItem {
-            NSStatusBar.system.removeStatusItem(statusItem)
+        print("🧹 CRITICAL CLEANUP: Removing all event monitors to prevent keyboard blocking")
+        
+        // Remove all event monitors - CRITICAL to prevent keyboard blocking
+        if let monitor = globalKeyMonitor {
+            NSEvent.removeMonitor(monitor)
+            globalKeyMonitor = nil
+            print("✅ Removed global key monitor")
         }
+        
+        if let monitor = localKeyMonitor {
+            NSEvent.removeMonitor(monitor)
+            localKeyMonitor = nil
+            print("✅ Removed local key monitor")
+        }
+        
+        if let monitor = globalMouseMonitor {
+            NSEvent.removeMonitor(monitor)
+            globalMouseMonitor = nil
+            print("✅ Removed global mouse monitor")
+        }
+        
+        if let monitor = escapeKeyMonitor {
+            NSEvent.removeMonitor(monitor)
+            escapeKeyMonitor = nil
+            print("✅ Removed escape key monitor")
+        }
+        
+        // Remove status bar item
+        if let currentStatusItem = statusItem {
+            NSStatusBar.system.removeStatusItem(currentStatusItem)
+            statusItem = nil
+            print("✅ Removed status bar item")
+        }
+        
+        // Mark as not initialized
+        isInitialized = false
+        
+        print("✅ CLEANUP COMPLETE: All event monitors removed, keyboard unblocked")
+    }
+    
+    private func setupCrashRecovery() {
+        // Set up emergency quit mechanism using a different hotkey
+        // This runs independently and can clean up even if main app crashes
+        let emergencyMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.keyDown]) { [weak self] event in
+            // Emergency quit: Cmd+Option+Shift+Q+Q (press Q twice)
+            if event.modifierFlags.contains([.command, .option, .shift]) && event.keyCode == 12 { // Q key
+                print("🚨 EMERGENCY QUIT TRIGGERED - Force cleanup and quit")
+                self?.emergencyQuit()
+            }
+        }
+        
+        // Store emergency monitor separately (not cleaned up in normal cleanup)
+        if emergencyMonitor != nil {
+            print("🆘 Emergency quit mechanism active: Cmd+Option+Shift+Q")
+        }
+        
+        // Set up periodic health check
+        Timer.scheduledTimer(withTimeInterval: 30.0, repeats: true) { [weak self] timer in
+            guard let self = self else {
+                timer.invalidate()
+                return
+            }
+            
+            // Check if we're in a broken state (no window but monitors active)
+            if self.globalKeyMonitor != nil && self.window == nil && self.isInitialized {
+                print("🚨 DETECTED BROKEN STATE: Event monitors active but no window - cleaning up")
+                self.cleanup()
+                timer.invalidate()
+            }
+        }
+    }
+    
+    @objc private func emergencyQuit() {
+        print("🚨 EMERGENCY QUIT: Forcing immediate cleanup and termination")
+        
+        // Force cleanup of ALL event monitors immediately
+        if let monitor = globalKeyMonitor {
+            NSEvent.removeMonitor(monitor)
+            globalKeyMonitor = nil
+        }
+        if let monitor = localKeyMonitor {
+            NSEvent.removeMonitor(monitor)
+            localKeyMonitor = nil
+        }
+        if let monitor = globalMouseMonitor {
+            NSEvent.removeMonitor(monitor)
+            globalMouseMonitor = nil
+        }
+        if let monitor = escapeKeyMonitor {
+            NSEvent.removeMonitor(monitor)
+            escapeKeyMonitor = nil
+        }
+        
+        // Remove status bar item to prevent ghost menu
+        if let currentStatusItem = statusItem {
+            NSStatusBar.system.removeStatusItem(currentStatusItem)
+            statusItem = nil
+        }
+        
+        // Force quit the application immediately
+        exit(0) // Use exit(0) instead of NSApplication.shared.terminate for guaranteed quit
     }
 }
 

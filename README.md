@@ -281,6 +281,29 @@ SearchFast automatically starts when you restart your Mac, ensuring seamless acc
 - This is normal and expected behavior
 - Feature works properly in release builds from App Store or direct download
 
+#### **🆘 Emergency Recovery**
+
+**If SearchFast becomes unresponsive and blocks keyboard input:**
+
+1. **Emergency Quit Hotkey:** Press `Cmd+Option+Shift+Q`
+   - This immediately removes all keyboard monitors and quits the app
+   - Restores full keyboard control to your system
+   - Works even when the main app interface is frozen
+
+2. **Menu Bar Emergency Option:**
+   - Right-click SearchFast menu bar icon → "Force Quit (Emergency)"
+   - Same effect as the emergency hotkey
+   - Available even when main window won't respond
+
+3. **System Recovery (Last Resort):**
+   - If emergency quit doesn't work, restart your Mac
+   - SearchFast will auto-start but you can disable launch at login in System Preferences
+
+**Why This Happens:**
+- Rarely occurs when the app crashes during startup after restart
+- Global keyboard monitors remain active but UI becomes unresponsive
+- Latest update includes comprehensive safeguards to prevent this issue
+
 ### **⚠️ Permission Troubleshooting**
 
 This section covers solutions to common permission-related issues you might encounter.
