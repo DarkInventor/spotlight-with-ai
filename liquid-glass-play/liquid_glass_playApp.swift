@@ -78,9 +78,6 @@ struct liquid_glass_playApp: App {
             ContentView()
                 .environmentObject(windowManager)
                 .background(Color.clear)
-                .onAppear {
-                    windowManager.setupWindow()
-                }
                 .focusedSceneValue(\.windowManager, windowManager)
         }
         .windowStyle(.hiddenTitleBar)
@@ -121,43 +118,60 @@ class WindowManager: NSObject, ObservableObject, NSWindowDelegate {
     
     override init() {
         super.init()
-        
-        // Mark as NOT initialized until everything is ready
         isInitialized = false
         
+        print("⏳ WindowManager created. Waiting for app to finish launching before setup...")
+        // Defer the main setup until after the app launch cycle completes.
+        // This prevents race conditions and ensures system services are ready,
+        // which is critical for launch-at-login reliability.
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(handleAppDidFinishLaunching),
+            name: NSApplication.didFinishLaunchingNotification,
+            object: nil
+        )
+    }
+
+    @objc private func handleAppDidFinishLaunching() {
+        // This setup should only ever run once.
+        guard !isInitialized else { return }
+        
+        // Ask to move to /Applications folder on first launch from a different location
+        promptToMoveToApplicationsFolderIfNeeded()
+        
+        print("🚀 App did finish launching. Starting WindowManager setup...")
+        
         do {
-            // Clean up any existing monitors first
+            // Clean up any existing monitors first in case of a strange state
             cleanup()
             
-            // Robust initialization with error handling
-        setupMenuBarIcon()
-        setupGlobalHotkey()
-        setupBackgroundOperation()
-        
-        // Permissions are now handled in onboarding flow
-        
-        // Check if this is first time launch - if so, show window automatically
-        checkFirstTimeLaunch()
-        registerForLoginIfNeeded()
+            // The original setup logic from init()
+            setupMenuBarIcon()
+            setupGlobalHotkey()
+            setupBackgroundOperation()
             
-            // Set up periodic check for launch at login status
-            setupLaunchAtLoginMonitoring()
+            // Explicitly set up the window here to ensure it's ready on background launch.
+            // This is crucial for the hotkey to work after a restart.
+            setupWindow()
             
-            // Add crash detection and recovery
+            checkFirstTimeLaunch()
+            registerForLoginIfNeeded()
+            // The monitoring timer is no longer needed.
+            // setupLaunchAtLoginMonitoring()
             setupCrashRecovery()
-            
-            // Set up periodic health check
             setupHealthCheck()
             
-            print("✅ WindowManager initialized successfully")
+            print("✅ WindowManager initialized successfully.")
             
-            // Only mark as initialized if everything succeeded
             isInitialized = true
         } catch {
-            print("❌ CRITICAL: WindowManager initialization failed: \(error)")
+            print("❌ CRITICAL: WindowManager initialization failed during post-launch setup: \(error)")
             cleanup()
-            // Keep isInitialized as false
+            // isInitialized remains false
         }
+        
+        // We are done with this notification.
+        NotificationCenter.default.removeObserver(self, name: NSApplication.didFinishLaunchingNotification, object: nil)
     }
     
     private func setupHealthCheck() {
@@ -198,129 +212,26 @@ class WindowManager: NSObject, ObservableObject, NSWindowDelegate {
     
     private func registerForLoginIfNeeded() {
         let hasCompletedOnboarding = UserDefaults.standard.bool(forKey: "hasCompletedOnboarding")
-        if hasCompletedOnboarding {
-            // Check current status first
-            let currentStatus = SMAppService.mainApp.status
-            print("🔍 Current SMAppService status: \(currentStatus)")
-            
-            switch currentStatus {
-            case .notRegistered:
-                 do {
-                     try SMAppService.mainApp.register()
-                    print("🚀 Successfully registered for launch at login.")
-                    
-                    // Verify registration with a more comprehensive check
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
-                        self.verifyLaunchAtLoginStatus()
-                    }
-                 } catch {
-                    print("❌ Failed to register for launch at login: \(error.localizedDescription)")
-                    // Store the failure for debugging
-                    UserDefaults.standard.set(error.localizedDescription, forKey: "lastRegistrationError")
-                    // Try again in a few seconds with exponential backoff
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 5.0) {
-                        self.retryRegistration()
-                    }
-                }
-                
-            case .notFound:
-                print("⚠️ App service not found - this may be expected in debug builds")
-                // In debug builds, this is normal and we shouldn't retry
-                if !isDebugBuild() {
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 10.0) {
-                        self.retryRegistration()
-                    }
-                }
-                
-            case .enabled:
-                print("✅ Launch at login already enabled")
-                // Clear any previous error
-                UserDefaults.standard.removeObject(forKey: "lastRegistrationError")
-                
-            case .requiresApproval:
-                print("⚠️ Launch at login requires user approval in System Preferences")
-                print("💡 User needs to approve in System Preferences > General > Login Items")
-                
-            @unknown default:
-                print("⚠️ Unknown SMAppService status: \(currentStatus)")
+        guard hasCompletedOnboarding else { return }
+
+        // This is the correct, modern way to manage a helper-based Login Item.
+        // This MUST EXACTLY match the CFBundleIdentifier in the launcher's Info.plist.
+        let launcherBundleId = "com.kathan.liquid-glass-play.Launcher"
+        let service = SMAppService.loginItem(identifier: launcherBundleId)
+
+        Task {
+            do {
+                try await service.register()
+                print("🚀 Successfully registered launcher for login.")
+            } catch {
+                print("❌ CRITICAL: Failed to register launcher for launch at login: \(error.localizedDescription)")
             }
         }
-    }
-    
-    private func isDebugBuild() -> Bool {
-        #if DEBUG
-        return true
-        #else
-        return false
-        #endif
-    }
-    
-    private func verifyLaunchAtLoginStatus() {
-        let status = SMAppService.mainApp.status
-        print("🔍 Verified SMAppService status: \(status)")
-        
-        if status != .enabled {
-            print("⚠️ Launch at login not properly enabled. Status: \(status)")
-            
-            // Store the registration attempt
-            UserDefaults.standard.set(Date(), forKey: "lastRegistrationAttempt")
-            
-            // If it requires approval, log helpful message
-            if status == .requiresApproval {
-                print("💡 User needs to approve in System Preferences > General > Login Items")
-                // Clear retry count since this is a user action requirement, not a technical failure
-                UserDefaults.standard.removeObject(forKey: "registrationRetryCount")
-            }
-        } else {
-            print("✅ Launch at login successfully verified")
-            // Clear all registration tracking on success
-            UserDefaults.standard.removeObject(forKey: "lastRegistrationAttempt")
-            UserDefaults.standard.removeObject(forKey: "registrationRetryCount")
-            UserDefaults.standard.removeObject(forKey: "lastRegistrationError")
-                 }
-    }
-    
-    private func retryRegistration() {
-        // Check if we've tried recently to avoid spam
-        if let lastAttempt = UserDefaults.standard.object(forKey: "lastRegistrationAttempt") as? Date,
-           Date().timeIntervalSince(lastAttempt) < 60 {
-            print("⏰ Skipping registration retry - attempted recently")
-            return
-        }
-        
-        // Implement exponential backoff to prevent too frequent retries
-        let retryCount = UserDefaults.standard.integer(forKey: "registrationRetryCount")
-        let maxRetries = 5
-        
-        if retryCount >= maxRetries {
-            print("❌ Max registration retries reached. Manual intervention may be required.")
-            UserDefaults.standard.set("Max retries reached", forKey: "lastRegistrationError")
-            return
-        }
-        
-        print("🔄 Retrying launch at login registration... (attempt \(retryCount + 1)/\(maxRetries))")
-        UserDefaults.standard.set(retryCount + 1, forKey: "registrationRetryCount")
-        registerForLoginIfNeeded()
     }
      
      private func setupLaunchAtLoginMonitoring() {
-         // Check launch at login status every 10 minutes to ensure it stays enabled
-         Timer.scheduledTimer(withTimeInterval: 600.0, repeats: true) { [weak self] _ in
-             guard let self = self else { return }
-             
-             let hasCompletedOnboarding = UserDefaults.standard.bool(forKey: "hasCompletedOnboarding")
-             guard hasCompletedOnboarding else { return }
-             
-             let status = SMAppService.mainApp.status
-             
-             // If the service becomes disabled or unregistered, try to re-register
-             if status == .notRegistered {
-                 print("🔄 Launch at login became unregistered - attempting to re-register")
-                 self.registerForLoginIfNeeded()
-             } else if status == .requiresApproval {
-                 print("⚠️ Launch at login requires user approval")
-            }
-        }
+        // This check is no longer needed with the modern API, as the system handles it.
+        // We can remove the timer to simplify the code.
     }
     
 
@@ -375,16 +286,30 @@ class WindowManager: NSObject, ObservableObject, NSWindowDelegate {
         let menu = NSMenu()
         
         // Add emergency quit option at the top
-        let emergencyQuitItem = NSMenuItem(title: "Force Quit (Emergency)", action: #selector(emergencyQuit), keyEquivalent: "")
+        let emergencyQuitItem = NSMenuItem(title: "Force Quit (Emergency)", action: #selector(emergencyQuit), keyEquivalent: "q")
         emergencyQuitItem.keyEquivalentModifierMask = [.command, .option, .shift]
-        emergencyQuitItem.keyEquivalent = "q"
+        emergencyQuitItem.target = self
         menu.addItem(emergencyQuitItem)
         
         menu.addItem(NSMenuItem.separator())
 
         // Add regular menu items
-        menu.addItem(NSMenuItem(title: "Show SearchFast", action: #selector(toggleWindow), keyEquivalent: ""))
-        menu.addItem(NSMenuItem(title: "Check Launch at Login Status", action: #selector(checkLaunchAtLoginStatus), keyEquivalent: ""))
+        let showItem = NSMenuItem(title: "Show SearchFast", action: #selector(toggleWindow), keyEquivalent: "")
+        showItem.target = self
+        menu.addItem(showItem)
+        
+        let checkStatusItem = NSMenuItem(title: "Check Launch at Login Status", action: #selector(checkLaunchAtLoginStatus), keyEquivalent: "")
+        checkStatusItem.target = self
+        menu.addItem(checkStatusItem)
+        
+        let resetItem = NSMenuItem(title: "Reset Onboarding...", action: #selector(resetOnboarding), keyEquivalent: "")
+        resetItem.target = self
+        menu.addItem(resetItem)
+        
+        let permissionsItem = NSMenuItem(title: "Request Permissions Manually", action: #selector(requestPermissions), keyEquivalent: "")
+        permissionsItem.target = self
+        menu.addItem(permissionsItem)
+
         menu.addItem(NSMenuItem.separator())
         menu.addItem(NSMenuItem(title: "Quit", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q"))
         
@@ -436,72 +361,46 @@ class WindowManager: NSObject, ObservableObject, NSWindowDelegate {
         // Show the onboarding again
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
             NotificationCenter.default.post(name: NSNotification.Name("ShowOnboarding"), object: nil)
+            self.showOnboardingWindow()
         }
     }
     
     @objc func checkLaunchAtLoginStatus() {
-        let status = SMAppService.mainApp.status
+        // This is the correct, modern way to manage a helper-based Login Item.
+        // This MUST EXACTLY match the CFBundleIdentifier in the launcher's Info.plist.
+        let launcherBundleId = "com.kathan.liquid-glass-play.Launcher"
+        let service = SMAppService.loginItem(identifier: launcherBundleId)
+        
+        let status = service.status
         let hasCompletedOnboarding = UserDefaults.standard.bool(forKey: "hasCompletedOnboarding")
-        let lastError = UserDefaults.standard.string(forKey: "lastRegistrationError")
-        let retryCount = UserDefaults.standard.integer(forKey: "registrationRetryCount")
         
         var message = "Launch at Login Status: "
-        var actionable = false
         
         switch status {
         case .enabled:
-            message += "✅ Enabled\n\nSearchfast will start automatically when you restart your Mac."
-            if retryCount > 0 {
-                message += "\n\n✅ Previous registration issues have been resolved."
-            }
+            message += "✅ Enabled\n\nSearchFast will start automatically when you restart your Mac."
         case .notRegistered:
-            message += "❌ Not Registered\n\nSearchfast will not start automatically after restart."
-            if let error = lastError {
-                message += "\n\n⚠️ Last error: \(error)"
-            }
-            if retryCount > 0 {
-                message += "\n\nRetry attempts: \(retryCount)/5"
-            }
-            actionable = hasCompletedOnboarding
+            message += "❌ Disabled\n\nSearchFast will not start automatically. You can enable it in System Settings > General > Login Items."
         case .requiresApproval:
-            message += "⚠️ Requires Approval\n\nSearchfast needs your permission to start automatically."
-            message += "\n\nTo approve:"
-            message += "\n1. Open System Preferences/Settings"
-            message += "\n2. Go to General → Login Items"
-            message += "\n3. Find 'Searchfast' and ensure it's enabled"
-            message += "\n\nAlternatively, click 'Open System Preferences' below."
+            message += "⚠️ Requires Approval\n\nTo enable SearchFast at login, please go to System Settings > General > Login Items and approve it."
         case .notFound:
-            if isDebugBuild() {
-                message += "⚠️ Service Not Found\n\nThis is expected in debug builds. Launch at login will work in the release version."
-            } else {
-                message += "❌ Service Not Found\n\nThere may be an issue with the app installation. Try reinstalling the app."
-            }
+             message += "⚠️ Not Found\n\nThe helper application might be missing or corrupted. Please try reinstalling the app."
         @unknown default:
-            message += "❓ Unknown Status: \(status)\n\nThis is an unexpected status. Please report this issue."
+            message += "❓ Unknown Status: \(status)\n\nThis is an unexpected status."
         }
         
         let alert = NSAlert()
         alert.messageText = "Launch at Login Status"
-        alert.informativeText = message + "\n\n🆘 Emergency Info:\nIf SearchFast becomes unresponsive and blocks keyboard input, press Cmd+Option+Shift+Q to force quit and restore keyboard control."
+        alert.informativeText = message
         alert.alertStyle = .informational
         
-        if actionable {
-            alert.addButton(withTitle: "Enable Launch at Login")
+        if status == .requiresApproval || status == .notRegistered {
+            alert.addButton(withTitle: "Open System Settings")
             alert.addButton(withTitle: "OK")
             
             let response = alert.runModal()
             if response == .alertFirstButtonReturn {
-                // Reset retry count when user manually tries
-                UserDefaults.standard.removeObject(forKey: "registrationRetryCount")
-                registerForLoginIfNeeded()
-            }
-        } else if status == .requiresApproval {
-            alert.addButton(withTitle: "Open System Preferences")
-            alert.addButton(withTitle: "OK")
-            
-            let response = alert.runModal()
-            if response == .alertFirstButtonReturn {
-                // Open System Preferences to Login Items
+                // Open System Settings to Login Items
                 if let url = URL(string: "x-apple.systempreferences:com.apple.preference.general") {
                     NSWorkspace.shared.open(url)
                 }
@@ -661,117 +560,124 @@ class WindowManager: NSObject, ObservableObject, NSWindowDelegate {
     }
     
     func setupWindow() {
-        guard !isConfigured else { 
+        guard !isConfigured else {
             print("🔄 Window already configured")
-            return 
+            return
         }
-        
-        guard isInitialized else {
-            print("⚠️ Cannot setup window - WindowManager not fully initialized")
-            // Retry after initialization completes
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-                self.setupWindow()
-            }
-            return 
-        }
-        
+
         DispatchQueue.main.async { [weak self] in
             guard let self = self else { return }
-            
-            // If we already have a window reference, use it
+
+            var windowToConfigure: NSWindow?
+
+            // First, check if we already have a reference to our window
             if let existingWindow = self.window {
-                print("🔄 Reusing existing window")
-                self.isConfigured = true
-                return
-            }
-            
-            // Find the main window - exclude already configured SpotlightWindows
-            guard var window = NSApplication.shared.windows.first(where: {
-                !$0.className.contains("StatusBar") && 
-                $0.contentView != nil && 
-                !($0 is SpotlightWindow && $0 == self.window)
-            }) else {
-                print("❌ No suitable window found for setup - will retry")
-                // Retry window setup after a delay
-                DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
-                    self.setupWindow()
-                }
-                return
-            }
-            
-            // Force borderless window to accept key status (like Spotlight)
-            if let spotlightWindow = window as? SpotlightWindow {
-                // Already a SpotlightWindow, good!
-                self.window = spotlightWindow
+                print("✅ Found existing window reference.")
+                windowToConfigure = existingWindow
             } else {
-                // Convert to our custom window class that can become key
-                let spotlightWindow = SpotlightWindow(contentRect: window.frame,
-                                                    styleMask: [.borderless, .fullSizeContentView],
-                                                    backing: .buffered,
-                                                    defer: false)
-                spotlightWindow.contentView = window.contentView
+                // If not, try to find a suitable window created by SwiftUI
+                print("🧐 No existing reference, searching for a SwiftUI-managed window...")
+                windowToConfigure = NSApplication.shared.windows.first {
+                    !$0.className.contains("StatusBar") && $0.contentView != nil
+                }
+            }
+
+            // If we STILL don't have a window, it means we launched in the background
+            // and must create it programmatically. This is the KEY to fixing boot launch.
+            if windowToConfigure == nil {
+                print("🚀 No window found. Creating one programmatically for background launch.")
                 
-                // Configure the new spotlight window
-                spotlightWindow.backgroundColor = NSColor.clear
-                spotlightWindow.isOpaque = false
-                spotlightWindow.hasShadow = false // No window shadow
-                spotlightWindow.level = .floating
-                spotlightWindow.collectionBehavior = [.canJoinAllSpaces, .stationary, .fullScreenAuxiliary, .ignoresCycle]
-                spotlightWindow.isMovable = false
-                spotlightWindow.hasShadow = false // Explicitly disable shadow again
+                // Create the content view
+                let contentView = ContentView()
+                    .environmentObject(self)
+                    .background(Color.clear)
+                    .focusedSceneValue(\.windowManager, self)
                 
-                // Replace the window
-                window.orderOut(nil) // Hide the old window
-                self.window = spotlightWindow
-                window = spotlightWindow
+                let hostingView = NSHostingView(rootView: contentView)
+                
+                // Create our custom Spotlight-style window
+                let newWindow = SpotlightWindow(
+                    contentRect: NSRect(x: 0, y: 0, width: 640, height: 72),
+                    styleMask: [.borderless, .fullSizeContentView],
+                    backing: .buffered,
+                    defer: false
+                )
+                newWindow.contentView = hostingView
+                windowToConfigure = newWindow
+            }
+
+            guard let window = windowToConfigure else {
+                print("❌ CRITICAL FAILURE: Could not find or create a window. Aborting setup.")
+                // We shouldn't retry here, as it indicates a fundamental problem.
+                return
             }
             
-            // Configure window to be COMPLETELY TRANSPARENT - pure floating content
-            window.backgroundColor = NSColor.clear
-            window.isOpaque = false
-            window.hasShadow = false // No window shadow - content provides its own
-            window.level = .floating // Float above everything
+            // If the window we found isn't our custom class, replace it.
+            if !(window is SpotlightWindow) {
+                 print("🔄 Window is not a SpotlightWindow, replacing it.")
+                 let spotlightWindow = SpotlightWindow(contentRect: window.frame,
+                                                     styleMask: [.borderless, .fullSizeContentView],
+                                                     backing: .buffered,
+                                                     defer: false)
+                 spotlightWindow.contentView = window.contentView
+                 
+                 // Configure the new spotlight window
+                 spotlightWindow.backgroundColor = NSColor.clear
+                 spotlightWindow.isOpaque = false
+                 spotlightWindow.hasShadow = false
+                 spotlightWindow.level = .floating
+                 spotlightWindow.collectionBehavior = [.canJoinAllSpaces, .stationary, .fullScreenAuxiliary, .ignoresCycle]
+                 spotlightWindow.isMovable = false
+                 
+                 // Replace the window
+                 window.orderOut(nil) // Hide the old window
+                 self.window = spotlightWindow
+            } else {
+                // It's already the correct type, just assign it.
+                self.window = window
+            }
             
+            // Now, self.window is guaranteed to be a valid SpotlightWindow.
+            guard let finalWindow = self.window else {
+                 print("❌ CRITICAL FAILURE: Window reference lost after configuration.")
+                 return
+            }
+
+            // Configure window to be COMPLETELY TRANSPARENT
+            finalWindow.backgroundColor = NSColor.clear
+            finalWindow.isOpaque = false
+            finalWindow.hasShadow = false
+            finalWindow.level = .floating
+
             // CRITICAL: Borderless with no visual artifacts
-            window.styleMask = [.borderless, .fullSizeContentView]
-            window.collectionBehavior = [.canJoinAllSpaces, .stationary, .fullScreenAuxiliary, .ignoresCycle]
-            window.isMovable = false
-            
+            finalWindow.styleMask = [.borderless, .fullSizeContentView]
+            finalWindow.collectionBehavior = [.canJoinAllSpaces, .stationary, .fullScreenAuxiliary, .ignoresCycle]
+            finalWindow.isMovable = false
+
             // Set up delegate for window events (like losing focus)
-            // Temporarily disabled to fix immediate closing issue
-            // window.delegate = self
+            finalWindow.delegate = self
             
-            // Ensure completely transparent window frame
-            window.alphaValue = 1.0
-            window.ignoresMouseEvents = false
-            
-            // NUCLEAR TAB ELIMINATION - NO TABS EVER! 🚫
-            window.tabbingMode = .disallowed
-            window.allowsToolTipsWhenApplicationIsInactive = false
-            
-            // Borderless windows don't have window controls - perfect!
-            
-            // Extra floating properties for maximum floatiness
-            window.isExcludedFromWindowsMenu = true
-            window.displaysWhenScreenProfileChanges = true
-            window.isRestorable = false
+            finalWindow.alphaValue = 1.0
+            finalWindow.ignoresMouseEvents = false
+            finalWindow.tabbingMode = .disallowed
+            finalWindow.isRestorable = false
             
             // Allow keyboard input
-            window.canHide = false
-            window.hidesOnDeactivate = false
+            finalWindow.canHide = false
+            finalWindow.hidesOnDeactivate = false
             
-            // Set initial size - Authentic Spotlight dimensions
+            // Set initial size
             let windowSize = NSSize(width: 640, height: 72)
-            window.setContentSize(windowSize)
+            finalWindow.setContentSize(windowSize)
             
-            // Center window
             self.centerWindow()
             
             // Hide window initially
-            window.orderOut(nil)
+            finalWindow.orderOut(nil)
             self.isVisible = false
-            
             self.isConfigured = true
+            
+            print("✅ Window setup complete. Ready for action.")
             
             // Setup escape key monitoring once window is ready
             self.setupEscapeKeyMonitor()
@@ -1231,6 +1137,93 @@ class WindowManager: NSObject, ObservableObject, NSWindowDelegate {
         
         // Force quit the application immediately
         exit(0) // Use exit(0) instead of NSApplication.shared.terminate for guaranteed quit
+    }
+    
+    private func promptToMoveToApplicationsFolderIfNeeded() {
+        #if !DEBUG
+        // Don't ask in debug builds
+        let hasBeenAsked = UserDefaults.standard.bool(forKey: "hasBeenAskedToMoveToApplications")
+        if hasBeenAsked { return }
+
+        let bundleURL = Bundle.main.bundleURL
+
+        guard let applicationsURL = FileManager.default.urls(for: .applicationDirectory, in: .localDomainMask).first else { return }
+
+        // If we're already in any subfolder of /Applications, we're good.
+        if bundleURL.path.hasPrefix(applicationsURL.path) {
+            return
+        }
+
+        let appName = Bundle.main.infoDictionary?["CFBundleName"] as? String ?? "the app"
+        
+        let alert = NSAlert()
+        alert.messageText = "Move “\(appName)” to Applications folder?"
+        alert.informativeText = "To ensure the app works correctly and can be easily found, it's best to keep it in your Applications folder."
+        alert.addButton(withTitle: "Move to Applications Folder")
+        alert.addButton(withTitle: "Don't Move")
+
+        let response = alert.runModal()
+        if response == .alertFirstButtonReturn {
+            moveToApplications()
+        } else {
+            // User chose not to move, so don't ask again.
+            UserDefaults.standard.set(true, forKey: "hasBeenAskedToMoveToApplications")
+        }
+        #endif
+    }
+
+    private func moveToApplications() {
+        let bundleURL = Bundle.main.bundleURL
+        guard let applicationsURL = FileManager.default.urls(for: .applicationDirectory, in: .localDomainMask).first else {
+            showMoveErrorAlert(message: "Could not find the Applications folder.")
+            return
+        }
+
+        let destinationURL = applicationsURL.appendingPathComponent(bundleURL.lastPathComponent)
+
+        // Using AppleScript with `ditto` is the most reliable way to move an application
+        // bundle and request administrator privileges.
+        let scriptString = """
+        do shell script "ditto \\"\(bundleURL.path)\\" \\"\(destinationURL.path)\\"" with administrator privileges
+        """
+
+        var error: NSDictionary?
+        if let script = NSAppleScript(source: scriptString) {
+            DispatchQueue.global(qos: .userInitiated).async {
+                if script.executeAndReturnError(&error) != nil {
+                    // Success! Relaunch from the new location and quit the old one.
+                    NSWorkspace.shared.open(destinationURL)
+                    DispatchQueue.main.async {
+                        NSApp.terminate(nil)
+                    }
+                } else {
+                    // Failure
+                    let errorMessage = error?["NSAppleScriptErrorMessage"] as? String ?? "An unknown error occurred."
+                    DispatchQueue.main.async {
+                        // Check if the user cancelled the password prompt.
+                        if (error?["NSAppleScriptErrorNumber"] as? Int) == -128 {
+                            // Don't show an error if the user just clicked "Cancel".
+                            // They might want to move it manually later.
+                            print("User cancelled moving the application.")
+                        } else {
+                            self.showMoveErrorAlert(message: "Failed to move the app automatically. Please drag it to your Applications folder manually. Error: \(errorMessage)")
+                        }
+                    }
+                }
+            }
+        } else {
+            DispatchQueue.main.async {
+                self.showMoveErrorAlert(message: "Could not prepare the script to move the application. Please drag it to your Applications folder manually.")
+            }
+        }
+    }
+
+    private func showMoveErrorAlert(message: String) {
+        let alert = NSAlert()
+        alert.messageText = "Error Moving Application"
+        alert.informativeText = message
+        alert.addButton(withTitle: "OK")
+        alert.runModal()
     }
 }
 

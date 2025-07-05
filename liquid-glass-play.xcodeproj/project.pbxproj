@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		DF9B3B8A2E18510E001030AC /* liquid-glass-playLauncher in CopyFiles */ = {isa = PBXBuildFile; fileRef = DF345B712E184C0E00733A41 /* liquid-glass-playLauncher */; settings = {ATTRIBUTES = (CodeSignOnCopy, ); }; };
 		DFA1DEB92E0FCECE0070E4F5 /* GoogleGenerativeAI in Frameworks */ = {isa = PBXBuildFile; productRef = DFA1DEB82E0FCECE0070E4F5 /* GoogleGenerativeAI */; };
 		DFA1DEC02E0FDB530070E4F5 /* SwiftfulLoadingIndicators in Frameworks */ = {isa = PBXBuildFile; productRef = DFA1DEBF2E0FDB530070E4F5 /* SwiftfulLoadingIndicators */; };
 		DFA1DECC2E0FFF410070E4F5 /* ScreenCaptureKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = DFA1DECB2E0FFF410070E4F5 /* ScreenCaptureKit.framework */; platformFilters = (macos, ); };
@@ -36,19 +37,53 @@
 		};
 /* End PBXContainerItemProxy section */
 
+/* Begin PBXCopyFilesBuildPhase section */
+		DF345B6F2E184C0E00733A41 /* CopyFiles */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = /usr/share/man/man1/;
+			dstSubfolderSpec = 0;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 1;
+		};
+		DF9B3B892E1850CA001030AC /* CopyFiles */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = Contents/Library/LoginItems;
+			dstSubfolderSpec = 1;
+			files = (
+				DF9B3B8A2E18510E001030AC /* liquid-glass-playLauncher in CopyFiles */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
+
 /* Begin PBXFileReference section */
-		DF09377B2E0E940800FF89F9 /* liquid-glass-play.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "liquid-glass-play.app"; sourceTree = BUILT_PRODUCTS_DIR; };
+		DF09377B2E0E940800FF89F9 /* SearchFast.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = SearchFast.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		DF0937892E0E940A00FF89F9 /* liquid-glass-playTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "liquid-glass-playTests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
 		DF0937932E0E940A00FF89F9 /* liquid-glass-playUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "liquid-glass-playUITests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
 		DF2A7B0A2E0FAC9100B6C8F7 /* FoundationModels.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = FoundationModels.framework; path = Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS26.0.sdk/System/Library/Frameworks/FoundationModels.framework; sourceTree = DEVELOPER_DIR; };
+		DF345B4C2E183DE800733A41 /* liquid-glass-playLauncherTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "liquid-glass-playLauncherTests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
+		DF345B562E183DE800733A41 /* liquid-glass-playLauncherUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "liquid-glass-playLauncherUITests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
+		DF345B712E184C0E00733A41 /* liquid-glass-playLauncher */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = "liquid-glass-playLauncher"; sourceTree = BUILT_PRODUCTS_DIR; };
 		DFA1DECB2E0FFF410070E4F5 /* ScreenCaptureKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = ScreenCaptureKit.framework; path = System/Library/Frameworks/ScreenCaptureKit.framework; sourceTree = SDKROOT; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		DF345B792E184D1700733A41 /* Exceptions for "liquid-glass-play" folder in "liquid-glass-playLauncher" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Views/Launcher/Launcher.swift,
+			);
+			target = DF345B702E184C0E00733A41 /* liquid-glass-playLauncher */;
+		};
 		DFA1DE772E0FC8B10070E4F5 /* Exceptions for "liquid-glass-play" folder in "liquid-glass-play" target */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
+				"com.kathan.liquid-glass-play.Launcher.plist",
 				Info.plist,
+				Views/Launcher/Launcher.swift,
 			);
 			target = DF09377A2E0E940800FF89F9 /* liquid-glass-play */;
 		};
@@ -59,6 +94,7 @@
 			isa = PBXFileSystemSynchronizedRootGroup;
 			exceptions = (
 				DFA1DE772E0FC8B10070E4F5 /* Exceptions for "liquid-glass-play" folder in "liquid-glass-play" target */,
+				DF345B792E184D1700733A41 /* Exceptions for "liquid-glass-play" folder in "liquid-glass-playLauncher" target */,
 			);
 			path = "liquid-glass-play";
 			sourceTree = "<group>";
@@ -71,6 +107,21 @@
 		DF0937962E0E940A00FF89F9 /* liquid-glass-playUITests */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			path = "liquid-glass-playUITests";
+			sourceTree = "<group>";
+		};
+		DF345B4F2E183DE800733A41 /* liquid-glass-playLauncherTests */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = "liquid-glass-playLauncherTests";
+			sourceTree = "<group>";
+		};
+		DF345B592E183DE800733A41 /* liquid-glass-playLauncherUITests */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = "liquid-glass-playLauncherUITests";
+			sourceTree = "<group>";
+		};
+		DF345B722E184C0F00733A41 /* liquid-glass-playLauncher */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = "liquid-glass-playLauncher";
 			sourceTree = "<group>";
 		};
 /* End PBXFileSystemSynchronizedRootGroup section */
@@ -107,6 +158,27 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		DF345B492E183DE800733A41 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		DF345B532E183DE800733A41 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		DF345B6E2E184C0E00733A41 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
@@ -116,6 +188,9 @@
 				DF09377D2E0E940800FF89F9 /* liquid-glass-play */,
 				DF09378C2E0E940A00FF89F9 /* liquid-glass-playTests */,
 				DF0937962E0E940A00FF89F9 /* liquid-glass-playUITests */,
+				DF345B4F2E183DE800733A41 /* liquid-glass-playLauncherTests */,
+				DF345B592E183DE800733A41 /* liquid-glass-playLauncherUITests */,
+				DF345B722E184C0F00733A41 /* liquid-glass-playLauncher */,
 				DF2E58E02E0EF47000AED614 /* Frameworks */,
 				DF09377C2E0E940800FF89F9 /* Products */,
 			);
@@ -124,9 +199,12 @@
 		DF09377C2E0E940800FF89F9 /* Products */ = {
 			isa = PBXGroup;
 			children = (
-				DF09377B2E0E940800FF89F9 /* liquid-glass-play.app */,
+				DF09377B2E0E940800FF89F9 /* SearchFast.app */,
 				DF0937892E0E940A00FF89F9 /* liquid-glass-playTests.xctest */,
 				DF0937932E0E940A00FF89F9 /* liquid-glass-playUITests.xctest */,
+				DF345B4C2E183DE800733A41 /* liquid-glass-playLauncherTests.xctest */,
+				DF345B562E183DE800733A41 /* liquid-glass-playLauncherUITests.xctest */,
+				DF345B712E184C0E00733A41 /* liquid-glass-playLauncher */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -150,6 +228,7 @@
 				DF0937772E0E940800FF89F9 /* Sources */,
 				DF0937782E0E940800FF89F9 /* Frameworks */,
 				DF0937792E0E940800FF89F9 /* Resources */,
+				DF9B3B892E1850CA001030AC /* CopyFiles */,
 			);
 			buildRules = (
 			);
@@ -171,7 +250,7 @@
 				DFF37E712E1546E70090D06D /* FirebaseFirestore */,
 			);
 			productName = "liquid-glass-play";
-			productReference = DF09377B2E0E940800FF89F9 /* liquid-glass-play.app */;
+			productReference = DF09377B2E0E940800FF89F9 /* SearchFast.app */;
 			productType = "com.apple.product-type.application";
 		};
 		DF0937882E0E940A00FF89F9 /* liquid-glass-playTests */ = {
@@ -220,6 +299,72 @@
 			productReference = DF0937932E0E940A00FF89F9 /* liquid-glass-playUITests.xctest */;
 			productType = "com.apple.product-type.bundle.ui-testing";
 		};
+		DF345B4B2E183DE800733A41 /* liquid-glass-playLauncherTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = DF345B612E183DE800733A41 /* Build configuration list for PBXNativeTarget "liquid-glass-playLauncherTests" */;
+			buildPhases = (
+				DF345B482E183DE800733A41 /* Sources */,
+				DF345B492E183DE800733A41 /* Frameworks */,
+				DF345B4A2E183DE800733A41 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				DF345B4F2E183DE800733A41 /* liquid-glass-playLauncherTests */,
+			);
+			name = "liquid-glass-playLauncherTests";
+			packageProductDependencies = (
+			);
+			productName = "liquid-glass-playLauncherTests";
+			productReference = DF345B4C2E183DE800733A41 /* liquid-glass-playLauncherTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
+		DF345B552E183DE800733A41 /* liquid-glass-playLauncherUITests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = DF345B642E183DE800733A41 /* Build configuration list for PBXNativeTarget "liquid-glass-playLauncherUITests" */;
+			buildPhases = (
+				DF345B522E183DE800733A41 /* Sources */,
+				DF345B532E183DE800733A41 /* Frameworks */,
+				DF345B542E183DE800733A41 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				DF345B592E183DE800733A41 /* liquid-glass-playLauncherUITests */,
+			);
+			name = "liquid-glass-playLauncherUITests";
+			packageProductDependencies = (
+			);
+			productName = "liquid-glass-playLauncherUITests";
+			productReference = DF345B562E183DE800733A41 /* liquid-glass-playLauncherUITests.xctest */;
+			productType = "com.apple.product-type.bundle.ui-testing";
+		};
+		DF345B702E184C0E00733A41 /* liquid-glass-playLauncher */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = DF345B752E184C1000733A41 /* Build configuration list for PBXNativeTarget "liquid-glass-playLauncher" */;
+			buildPhases = (
+				DF345B6D2E184C0E00733A41 /* Sources */,
+				DF345B6E2E184C0E00733A41 /* Frameworks */,
+				DF345B6F2E184C0E00733A41 /* CopyFiles */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				DF345B722E184C0F00733A41 /* liquid-glass-playLauncher */,
+			);
+			name = "liquid-glass-playLauncher";
+			packageProductDependencies = (
+			);
+			productName = "liquid-glass-playLauncher";
+			productReference = DF345B712E184C0E00733A41 /* liquid-glass-playLauncher */;
+			productType = "com.apple.product-type.tool";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -227,7 +372,7 @@
 			isa = PBXProject;
 			attributes = {
 				BuildIndependentTargetsInParallel = 1;
-				LastSwiftUpdateCheck = 1640;
+				LastSwiftUpdateCheck = 2600;
 				LastUpgradeCheck = 2600;
 				TargetAttributes = {
 					DF09377A2E0E940800FF89F9 = {
@@ -240,6 +385,17 @@
 					DF0937922E0E940A00FF89F9 = {
 						CreatedOnToolsVersion = 16.4;
 						TestTargetID = DF09377A2E0E940800FF89F9;
+					};
+					DF345B4B2E183DE800733A41 = {
+						CreatedOnToolsVersion = 26.0;
+						TestTargetID = DF345B3C2E183DE600733A41;
+					};
+					DF345B552E183DE800733A41 = {
+						CreatedOnToolsVersion = 26.0;
+						TestTargetID = DF345B3C2E183DE600733A41;
+					};
+					DF345B702E184C0E00733A41 = {
+						CreatedOnToolsVersion = 26.0;
 					};
 				};
 			};
@@ -265,6 +421,9 @@
 				DF09377A2E0E940800FF89F9 /* liquid-glass-play */,
 				DF0937882E0E940A00FF89F9 /* liquid-glass-playTests */,
 				DF0937922E0E940A00FF89F9 /* liquid-glass-playUITests */,
+				DF345B4B2E183DE800733A41 /* liquid-glass-playLauncherTests */,
+				DF345B552E183DE800733A41 /* liquid-glass-playLauncherUITests */,
+				DF345B702E184C0E00733A41 /* liquid-glass-playLauncher */,
 			);
 		};
 /* End PBXProject section */
@@ -291,6 +450,20 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		DF345B4A2E183DE800733A41 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		DF345B542E183DE800733A41 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
@@ -309,6 +482,27 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 		DF09378F2E0E940A00FF89F9 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		DF345B482E183DE800733A41 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		DF345B522E183DE800733A41 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		DF345B6D2E184C0E00733A41 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -503,7 +697,7 @@
 				MACOSX_DEPLOYMENT_TARGET = 26.0;
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = "com.app.liquid-glass-play";
-				PRODUCT_NAME = "$(TARGET_NAME)";
+				PRODUCT_NAME = SearchFast;
 				REGISTER_APP_GROUPS = YES;
 				RUNTIME_EXCEPTION_ALLOW_DYLD_ENVIRONMENT_VARIABLES = NO;
 				RUNTIME_EXCEPTION_ALLOW_JIT = NO;
@@ -531,6 +725,7 @@
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEAD_CODE_STRIPPING = YES;
+				DEBUG_INFORMATION_FORMAT = dwarf;
 				DEVELOPMENT_TEAM = 2B794X3YTR;
 				ENABLE_APP_SANDBOX = YES;
 				ENABLE_FILE_ACCESS_DOWNLOADS_FOLDER = readwrite;
@@ -572,7 +767,7 @@
 				MACOSX_DEPLOYMENT_TARGET = 26.0;
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = "com.app.liquid-glass-play";
-				PRODUCT_NAME = "$(TARGET_NAME)";
+				PRODUCT_NAME = SearchFast;
 				REGISTER_APP_GROUPS = YES;
 				RUNTIME_EXCEPTION_ALLOW_DYLD_ENVIRONMENT_VARIABLES = NO;
 				RUNTIME_EXCEPTION_ALLOW_JIT = NO;
@@ -683,6 +878,120 @@
 			};
 			name = Release;
 		};
+		DF345B622E183DE800733A41 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 2B794X3YTR;
+				GENERATE_INFOPLIST_FILE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 26.0;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "com.liquid-glass-play.liquid-glass-playLauncherTests";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = macosx;
+				STRING_CATALOG_GENERATE_SYMBOLS = NO;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/liquid-glass-playLauncher.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/liquid-glass-playLauncher";
+			};
+			name = Debug;
+		};
+		DF345B632E183DE800733A41 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 2B794X3YTR;
+				GENERATE_INFOPLIST_FILE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 26.0;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "com.liquid-glass-play.liquid-glass-playLauncherTests";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = macosx;
+				STRING_CATALOG_GENERATE_SYMBOLS = NO;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/liquid-glass-playLauncher.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/liquid-glass-playLauncher";
+			};
+			name = Release;
+		};
+		DF345B652E183DE800733A41 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 2B794X3YTR;
+				GENERATE_INFOPLIST_FILE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 26.0;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "com.liquid-glass-play.liquid-glass-playLauncherUITests";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = macosx;
+				STRING_CATALOG_GENERATE_SYMBOLS = NO;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TEST_TARGET_NAME = "liquid-glass-playLauncher";
+			};
+			name = Debug;
+		};
+		DF345B662E183DE800733A41 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 2B794X3YTR;
+				GENERATE_INFOPLIST_FILE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 26.0;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "com.liquid-glass-play.liquid-glass-playLauncherUITests";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = macosx;
+				STRING_CATALOG_GENERATE_SYMBOLS = NO;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TEST_TARGET_NAME = "liquid-glass-playLauncher";
+			};
+			name = Release;
+		};
+		DF345B762E184C1000733A41 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = 2B794X3YTR;
+				ENABLE_HARDENED_RUNTIME = YES;
+				MACOSX_DEPLOYMENT_TARGET = 26.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "com.kathan.liquid-glass-play.liquid-glass-playLauncher";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = macosx;
+				SKIP_INSTALL = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+			};
+			name = Debug;
+		};
+		DF345B772E184C1000733A41 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = 2B794X3YTR;
+				ENABLE_HARDENED_RUNTIME = YES;
+				MACOSX_DEPLOYMENT_TARGET = 26.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "com.kathan.liquid-glass-play.liquid-glass-playLauncher";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = macosx;
+				SKIP_INSTALL = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -718,6 +1027,33 @@
 			buildConfigurations = (
 				DF0937A42E0E940A00FF89F9 /* Debug */,
 				DF0937A52E0E940A00FF89F9 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		DF345B612E183DE800733A41 /* Build configuration list for PBXNativeTarget "liquid-glass-playLauncherTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				DF345B622E183DE800733A41 /* Debug */,
+				DF345B632E183DE800733A41 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		DF345B642E183DE800733A41 /* Build configuration list for PBXNativeTarget "liquid-glass-playLauncherUITests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				DF345B652E183DE800733A41 /* Debug */,
+				DF345B662E183DE800733A41 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		DF345B752E184C1000733A41 /* Build configuration list for PBXNativeTarget "liquid-glass-playLauncher" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				DF345B762E184C1000733A41 /* Debug */,
+				DF345B772E184C1000733A41 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
