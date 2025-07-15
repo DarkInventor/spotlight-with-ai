@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>CFBundleDevelopmentRegion</key>
+    <string>en</string>
+    <key>CFBundleDisplayName</key>
+    <string>SearchFast</string>
+    <key>CFBundleExecutable</key>
+    <string>$(EXECUTABLE_NAME)</string>
+    <key>CFBundleIdentifier</key>
+    <string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
+    <key>CFBundleInfoDictionaryVersion</key>
+    <string>6.0</string>
+    <key>CFBundleName</key>
+    <string>$(PRODUCT_NAME)</string>
+    <key>CFBundlePackageType</key>
+    <string>APPL</string>
+    <key>CFBundleShortVersionString</key>
+    <string>1.0</string>
+    <key>CFBundleVersion</key>
+    <string>1</string>
+    <key>LSMinimumSystemVersion</key>
+    <string>14.6</string>
+    <key>NSMicrophoneUsageDescription</key>
+    <string>This app uses the microphone for voice input to allow you to speak commands and queries instead of typing them. Voice input helps save 2000 cats by providing a faster and more natural interaction method.</string>
+    <key>NSScreenCaptureUsageDescription</key>
+    <string>This app captures screenshots to provide context-aware AI assistance. Screenshot analysis helps save 2000 cats by understanding what you're working on and providing relevant suggestions.</string>
+    <key>NSAppleEventsUsageDescription</key>
+    <string>This app uses Apple Events to automate other applications like writing to documents, opening apps, and performing actions on your behalf. Automation helps save 2000 cats by reducing repetitive tasks.</string>
+    <key>LSUIElement</key>
+    <true/>
+</dict>
+</plist> 

@@ -497,11 +497,15 @@ If you need to reset permissions:
 3. **Restart SearchFast** and go through onboarding again
 
 ### **Setup Steps**
-1. Clone this repository
-2. Add your Google AI API key to `APIKey.swift`
-3. Build and run in Xcode
-4. Grant required permissions when prompted
-5. Press `Cmd+Shift+Space` to start using!
+**⚠️ IMPORTANT: This project requires API keys and configuration files that are not included for security reasons.**
+
+1. **Follow the complete setup guide:** See [SETUP.md](SETUP.md) for detailed instructions
+2. **Configure API keys:** You'll need Google AI and optionally Deepgram and Firebase keys
+3. **Set up permissions:** Grant Accessibility and Screen Recording permissions
+4. **Build and run:** Open in Xcode and build the project
+5. **Start using:** Press `Cmd+Shift+Space` to activate SearchFast
+
+> **🔒 Security Note:** All sensitive configuration files (API keys, Firebase config, entitlements) are excluded from this repository. See [SETUP.md](SETUP.md) for complete setup instructions.
 
 ## 📋 Supported Applications
 
@@ -564,6 +568,22 @@ We welcome contributions! Please see our contributing guidelines and feel free t
 - Improve app automation support
 - Enhance context analysis capabilities
 - Add new proactive greeting scenarios
+
+### 🔒 Security Guidelines for Contributors
+
+**⚠️ CRITICAL: Never commit sensitive files!**
+
+Before contributing:
+1. **Read [SETUP.md](SETUP.md)** for complete development setup
+2. **Never commit API keys** - they're in `.gitignore` for your protection
+3. **Use template files** - copy `.template` files and add your keys locally
+4. **Test your changes** - ensure the app builds without sensitive files
+
+**Protected files (DO NOT COMMIT):**
+- `APIKey.swift` - Contains actual API keys
+- `*.plist` files - Configuration and Firebase data
+- `*.entitlements` - App permissions and capabilities
+- Any file containing secrets, keys, or personal identifiers
 
 ## 📄 License
 

@@ -2,9 +2,9 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-	<key>API_KEY</key>
-	<string>AIzaSyDIxq05RXMLkt_R3zXoPmr9ku0gEsj4UZA</string>
-	<key>DEEPGRAM_API_KEY</key>
-	<string>3dd3bf09eb229eeba036555f85e3cd5fde97d5ef</string>
+    <key>API_KEY</key>
+    <string>YOUR_GOOGLE_GENERATIVE_AI_API_KEY_HERE</string>
+    <key>DEEPGRAM_API_KEY</key>
+    <string>YOUR_DEEPGRAM_API_KEY_HERE</string>
 </dict>
-</plist>
+</plist> 

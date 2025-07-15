@@ -1,4 +1,204 @@
+# ========================
+# SENSITIVE FILES - DO NOT COMMIT
+# ========================
+
+# All plist files (configuration, API keys, Firebase config)
+*.plist
 Info.plist
 GenerativeAI-Info.plist
 GoogleService-Info.plist
-*.plist
+
+# Entitlements files (contain app permissions and capabilities)
+*.entitlements
+liquid_glass_play.entitlements
+
+# API Keys and configuration files
+APIKey.swift
+*API_KEY*
+*api_key*
+*apikey*
+
+# Certificates and provisioning profiles  
+*.mobileprovision
+*.p12
+*.cer
+*.certSigningRequest
+
+# Development team and signing configuration
+*.xcconfig
+*team_id*
+*DEVELOPMENT_TEAM*
+
+# Firebase and third-party service configs
+firebase*.json
+*google-services*
+*GoogleService*
+
+# Environment and configuration files
+.env
+.env.*
+config.json
+secrets.json
+
+# ========================
+# XCODE FILES
+# ========================
+
+# User-specific Xcode files
+*.xcuserstate
+*.xcuserdatad/
+xcuserdata/
+DerivedData/
+*.moved-aside
+*.pbxuser
+!default.pbxuser
+*.mode1v3
+!default.mode1v3
+*.mode2v3
+!default.mode2v3
+*.perspectivev3
+!default.perspectivev3
+
+# Xcode Patch
+*.xccheckout
+*.xcscmblueprint
+
+# Xcode workspace
+*.xcworkspace
+!default.xcworkspace
+
+# ========================
+# MACOS FILES
+# ========================
+
+# macOS system files
+.DS_Store
+.AppleDouble
+.LSOverride
+Icon
+
+# Thumbnails
+._*
+
+# Files that might appear in the root of a volume
+.DocumentRevisions-V100
+.fseventsd
+.Spotlight-V100
+.TemporaryItems
+.Trashes
+.VolumeIcon.icns
+.com.apple.timemachine.donotpresent
+
+# Directories potentially created on remote AFP share
+.AppleDB
+.AppleDesktop
+Network Trash Folder
+Temporary Items
+.apdisk
+
+# ========================
+# BUILD AND TEMPORARY FILES
+# ========================
+
+# Build results
+build/
+Build/
+**/build/*
+
+# Archives
+*.ipa
+*.dSYM.zip
+*.dSYM
+
+# Swift Package Manager
+.swiftpm/
+Packages/
+Package.pins
+Package.resolved
+*.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/
+
+# CocoaPods
+Pods/
+*.xcworkspace
+Podfile.lock
+
+# Carthage
+Carthage/
+
+# Accio dependency management
+Dependencies/
+.accio/
+
+# ========================
+# LOGS AND DEBUGGING
+# ========================
+
+# Debug files
+*.log
+*.out
+*.err
+
+# Crash reports
+*.crash
+
+# Memory and performance reports  
+*.memgraph
+*.trace
+
+# ========================
+# TEMPORARY AND CACHE FILES
+# ========================
+
+# Temporary files
+*~
+*.swp
+*.swo
+*.tmp
+
+# Cache files
+*.cache
+
+# IDE files
+.vscode/
+.idea/
+
+# ========================
+# BACKUP FILES
+# ========================
+
+# Backup files
+*.backup
+*.bak
+*~
+
+# ========================
+# SECURITY AND SENSITIVE DATA
+# ========================
+
+# SSH keys
+id_rsa
+id_dsa
+*.key
+*.private
+
+# GPG keys
+*.gpg
+*.asc
+
+# Password files
+*password*
+*credentials*
+
+# Database files
+*.db
+*.sqlite
+*.sqlite3
+
+# ========================
+# DOCUMENTATION DRAFTS
+# ========================
+
+# Draft documentation (keep published docs)
+*draft*
+*WIP*
+*TODO*
