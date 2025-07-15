@@ -18,4 +18,16 @@ enum APIKey {
     }
     return value
   }
+
+  static var deepgram: String {
+    guard let filePath = Bundle.main.path(forResource: "GenerativeAI-Info", ofType: "plist")
+    else {
+      fatalError("Couldn't find file 'GenerativeAI-Info.plist'.")
+    }
+    let plist = NSDictionary(contentsOfFile: filePath)
+    guard let value = plist?.object(forKey: "DEEPGRAM_API_KEY") as? String, !value.isEmpty else {
+      fatalError("Couldn't find key 'DEEPGRAM_API_KEY' in 'GenerativeAI-Info.plist' or it is empty.")
+    }
+    return value
+  }
 }

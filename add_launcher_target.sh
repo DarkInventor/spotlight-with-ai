@@ -7,12 +7,12 @@
 # --- Configuration ---
 PROJECT_DIR="."
 PROJECT_NAME="liquid-glass-play"
-MAIN_APP_BUNDLE_ID="com.kathan.liquid-glass-play"
+MAIN_APP_BUNDLE_ID="com.app.liquid-glass-play"
 
 LAUNCHER_DIR_NAME="Launcher"
 LAUNCHER_TARGET_NAME="${PROJECT_NAME}Launcher"
 LAUNCHER_BUNDLE_ID="${MAIN_APP_BUNDLE_ID}.Launcher"
-LAUNCHER_PLIST_FILENAME="com.kathan.liquid-glass-play.Launcher.plist"
+LAUNCHER_PLIST_FILENAME="com.app.liquid-glass-play.Launcher.plist"
 
 # --- File Content ---
 

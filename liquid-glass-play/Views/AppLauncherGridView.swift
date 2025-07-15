@@ -4,10 +4,11 @@ import AppKit
 struct AppLauncherGridView: View {
     let apps: [UniversalSearchResult]
     let onAppSelected: (UniversalSearchResult) -> Void
+    @Environment(\.colorScheme) private var colorScheme
     
     // Demo categories (simple heuristics)
     private var groupedApps: [(title: String, apps: [UniversalSearchResult])]{
-        let suggestions = ["Google Chrome", "Xcode", "Cursor", "Microsoft Word", "Notion"]
+        let suggestions = ["Safari", "Google Chrome", "Xcode", "Cursor", "Microsoft Word", "Notion"]
         let productivity = ["Todoist", "Preview", "Microsoft Excel", "Calendar", "Terminal"]
         let devTools = ["Screen Studio", "Docker", "Claude", "Windsurf", "Discord"]
         
@@ -29,84 +30,186 @@ struct AppLauncherGridView: View {
     
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            ForEach(groupedApps, id: \.title) { group in
-                SectionHeader(title: group.title, showMore: group.apps.count > 5)
+            ForEach(Array(groupedApps.enumerated()), id: \.element.title) { index, group in
+                SectionHeader(
+                    title: group.title, 
+                    showMore: group.apps.count > 5,
+                    isFirst: index == 0
+                )
+                
                 ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 28) {
+                    LazyHStack(spacing: 20) {
                         ForEach(group.apps.prefix(5), id: \.path) { app in
                             AppIconButton(app: app, onTap: { onAppSelected(app) })
                         }
                     }
-                    .padding(.horizontal, 24)
-                    .padding(.vertical, 8)
+                    .padding(.horizontal, 20)
+                    .padding(.vertical, 12)
                 }
-                Divider().opacity(0.12)
+                
+                // Refined divider (except for last section)
+                if index < groupedApps.count - 1 {
+                    Divider()
+                        .padding(.horizontal, 20)
+                        .padding(.vertical, 8)
+                        .opacity(0.2)
+                }
             }
         }
         .background(
-            RoundedRectangle(cornerRadius: 28)
-                .fill(Color.white.opacity(0.25))
-                .background(.ultraThinMaterial)
-                .shadow(color: Color.black.opacity(0.08), radius: 16, x: 0, y: 8)
+            RoundedRectangle(cornerRadius: 16)
+                .fill(colorScheme == .light ? 
+                      Color.white.opacity(0.85) : 
+                      Color.black.opacity(0.6))
+                .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 16))
+                .shadow(
+                    color: colorScheme == .light ? 
+                           Color.black.opacity(0.1) : 
+                           Color.clear, 
+                    radius: 12, 
+                    x: 0, 
+                    y: 4
+                )
         )
-        .clipShape(RoundedRectangle(cornerRadius: 28))
-        .padding(16)
+        .padding(.horizontal, 16)
+        .padding(.vertical, 8)
     }
 }
 
 private struct SectionHeader: View {
     let title: String
     let showMore: Bool
+    let isFirst: Bool
+    @Environment(\.colorScheme) private var colorScheme
+    
     var body: some View {
-        HStack {
+        HStack(alignment: .center, spacing: 8) {
+            // Icon for section type
+            Image(systemName: sectionIcon)
+                .font(.system(size: 13, weight: .medium))
+                .foregroundColor(.secondary)
+            
             Text(title)
-                .font(.system(size: 15, weight: .semibold))
-                .foregroundColor(.primary)
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundColor(.secondary)
+                .textCase(.uppercase)
+                .tracking(0.5)
+            
             Spacer()
+            
             if showMore {
-                Button("Show More") {}
-                    .font(.system(size: 13, weight: .medium))
+                Button(action: {}) {
+                    HStack(spacing: 4) {
+                        Text("Show More")
+                            .font(.system(size: 12, weight: .medium))
+                        Image(systemName: "chevron.right")
+                            .font(.system(size: 10, weight: .medium))
+                    }
                     .foregroundColor(.blue)
-                    .buttonStyle(.plain)
+                }
+                .buttonStyle(.plain)
+                .onHover { hovering in
+                    // Add subtle hover effect
+                }
             }
         }
-        .padding(.horizontal, 24)
-        .padding(.top, 18)
-        .padding(.bottom, 2)
+        .padding(.horizontal, 20)
+        .padding(.top, isFirst ? 16 : 12)
+        .padding(.bottom, 8)
+    }
+    
+    private var sectionIcon: String {
+        switch title {
+        case "Suggestions":
+            return "star.fill"
+        case "Productivity & Finance":
+            return "briefcase.fill"
+        case "Developer Tools":
+            return "hammer.fill"
+        default:
+            return "folder.fill"
+        }
     }
 }
 
 private struct AppIconButton: View {
     let app: UniversalSearchResult
     let onTap: () -> Void
+    @Environment(\.colorScheme) private var colorScheme
+    @State private var isHovered = false
+    @State private var isPressed = false
+    
     var body: some View {
-        VStack(spacing: 8) {
+        VStack(spacing: 10) {
             Button(action: onTap) {
-                if let icon = app.icon {
-                    Image(nsImage: icon)
-                        .resizable()
-                        .aspectRatio(contentMode: .fit)
-                        .frame(width: 54, height: 54)
-                        .cornerRadius(12)
-                        .shadow(color: Color.black.opacity(0.08), radius: 4, x: 0, y: 2)
-                } else {
-                    RoundedRectangle(cornerRadius: 12)
-                        .fill(Color.gray.opacity(0.2))
-                        .frame(width: 54, height: 54)
-                        .overlay(
-                            Image(systemName: "app")
-                                .font(.system(size: 24))
-                                .foregroundColor(.gray)
-                        )
+                Group {
+                    if let icon = app.icon {
+                        Image(nsImage: icon)
+                            .resizable()
+                            .aspectRatio(contentMode: .fit)
+                            .frame(width: 56, height: 56)
+                    } else {
+                        RoundedRectangle(cornerRadius: 12)
+                            .fill(Color.gray.opacity(0.15))
+                            .frame(width: 56, height: 56)
+                            .overlay(
+                                Image(systemName: "app.fill")
+                                    .font(.system(size: 26))
+                                    .foregroundColor(.secondary)
+                            )
+                    }
                 }
+                .shadow(
+                    color: colorScheme == .light ? 
+                           Color.black.opacity(0.15) : 
+                           Color.clear, 
+                    radius: isHovered ? 8 : 4, 
+                    x: 0, 
+                    y: isHovered ? 4 : 2
+                )
+                .scaleEffect(isPressed ? 0.9 : (isHovered ? 1.05 : 1.0))
+                .animation(.spring(response: 0.3, dampingFraction: 0.7), value: isHovered)
+                .animation(.spring(response: 0.2, dampingFraction: 0.8), value: isPressed)
             }
             .buttonStyle(.plain)
+            .onHover { hovering in
+                withAnimation(.easeInOut(duration: 0.2)) {
+                    isHovered = hovering
+                }
+            }
+            .simultaneousGesture(
+                DragGesture(minimumDistance: 0)
+                    .onChanged { _ in
+                        withAnimation(.easeInOut(duration: 0.1)) {
+                            isPressed = true
+                        }
+                    }
+                    .onEnded { _ in
+                        withAnimation(.easeInOut(duration: 0.1)) {
+                            isPressed = false
+                        }
+                    }
+            )
+            
             Text(app.name)
-                .font(.system(size: 13, weight: .regular))
+                .font(.system(size: 12, weight: .medium))
                 .foregroundColor(.primary)
-                .lineLimit(1)
-                .frame(width: 64)
+                .lineLimit(2)
+                .multilineTextAlignment(.center)
+                .frame(width: 72, height: 32)
+                .opacity(isHovered ? 0.8 : 1.0)
+                .scaleEffect(isHovered ? 0.95 : 1.0)
+                .animation(.easeInOut(duration: 0.2), value: isHovered)
         }
+        .frame(width: 80)
+        .padding(.vertical, 4)
+        .background(
+            RoundedRectangle(cornerRadius: 12)
+                .fill(isHovered ? 
+                      (colorScheme == .light ? Color.blue.opacity(0.05) : Color.blue.opacity(0.1)) : 
+                      Color.clear)
+                .animation(.easeInOut(duration: 0.2), value: isHovered)
+        )
     }
 }
 
@@ -114,6 +217,7 @@ private struct AppIconButton: View {
 struct AppLauncherGridView_Previews: PreviewProvider {
     static var previews: some View {
         let demoApps = [
+            UniversalSearchResult(name: "Safari", path: "/Applications/Safari.app", category: .applications, icon: NSWorkspace.shared.icon(forFile: "/Applications/Safari.app"), size: nil, modifiedDate: nil, type: "Application", bundleIdentifier: nil, relevanceScore: nil),
             UniversalSearchResult(name: "Google Chrome", path: "/Applications/Google Chrome.app", category: .applications, icon: NSWorkspace.shared.icon(forFile: "/Applications/Google Chrome.app"), size: nil, modifiedDate: nil, type: "Application", bundleIdentifier: nil, relevanceScore: nil),
             UniversalSearchResult(name: "Xcode", path: "/Applications/Xcode.app", category: .applications, icon: NSWorkspace.shared.icon(forFile: "/Applications/Xcode.app"), size: nil, modifiedDate: nil, type: "Application", bundleIdentifier: nil, relevanceScore: nil),
             UniversalSearchResult(name: "Cursor", path: "/Applications/Cursor.app", category: .applications, icon: NSWorkspace.shared.icon(forFile: "/Applications/Cursor.app"), size: nil, modifiedDate: nil, type: "Application", bundleIdentifier: nil, relevanceScore: nil),
@@ -130,11 +234,34 @@ struct AppLauncherGridView_Previews: PreviewProvider {
             UniversalSearchResult(name: "Windsurf", path: "/Applications/Windsurf.app", category: .applications, icon: NSWorkspace.shared.icon(forFile: "/Applications/Windsurf.app"), size: nil, modifiedDate: nil, type: "Application", bundleIdentifier: nil, relevanceScore: nil),
             UniversalSearchResult(name: "Discord", path: "/Applications/Discord.app", category: .applications, icon: NSWorkspace.shared.icon(forFile: "/Applications/Discord.app"), size: nil, modifiedDate: nil, type: "Application", bundleIdentifier: nil, relevanceScore: nil)
         ]
-        AppLauncherGridView(apps: demoApps, onAppSelected: { _ in })
-            .frame(width: 600, height: 420)
-            .background(
-                LinearGradient(gradient: Gradient(colors: [Color.blue.opacity(0.18), Color.white.opacity(0.12)]), startPoint: .top, endPoint: .bottom)
-            )
+        
+        Group {
+            // Light mode preview
+            AppLauncherGridView(apps: demoApps, onAppSelected: { _ in })
+                .frame(width: 600, height: 420)
+                .background(
+                    LinearGradient(
+                        gradient: Gradient(colors: [Color.blue.opacity(0.1), Color.white.opacity(0.05)]), 
+                        startPoint: .top, 
+                        endPoint: .bottom
+                    )
+                )
+                .preferredColorScheme(.light)
+                .previewDisplayName("Light Mode")
+            
+            // Dark mode preview
+            AppLauncherGridView(apps: demoApps, onAppSelected: { _ in })
+                .frame(width: 600, height: 420)
+                .background(
+                    LinearGradient(
+                        gradient: Gradient(colors: [Color.blue.opacity(0.2), Color.black.opacity(0.3)]), 
+                        startPoint: .top, 
+                        endPoint: .bottom
+                    )
+                )
+                .preferredColorScheme(.dark)
+                .previewDisplayName("Dark Mode")
+        }
     }
 }
 #endif 

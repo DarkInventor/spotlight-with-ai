@@ -216,7 +216,7 @@ class WindowManager: NSObject, ObservableObject, NSWindowDelegate {
 
         // This is the correct, modern way to manage a helper-based Login Item.
         // This MUST EXACTLY match the CFBundleIdentifier in the launcher's Info.plist.
-        let launcherBundleId = "com.kathan.liquid-glass-play.Launcher"
+        let launcherBundleId = "com.app.liquid-glass-play.Launcher"
         let service = SMAppService.loginItem(identifier: launcherBundleId)
 
         Task {
@@ -368,7 +368,7 @@ class WindowManager: NSObject, ObservableObject, NSWindowDelegate {
     @objc func checkLaunchAtLoginStatus() {
         // This is the correct, modern way to manage a helper-based Login Item.
         // This MUST EXACTLY match the CFBundleIdentifier in the launcher's Info.plist.
-        let launcherBundleId = "com.kathan.liquid-glass-play.Launcher"
+        let launcherBundleId = "com.app.liquid-glass-play.Launcher"
         let service = SMAppService.loginItem(identifier: launcherBundleId)
         
         let status = service.status
@@ -503,6 +503,11 @@ class WindowManager: NSObject, ObservableObject, NSWindowDelegate {
             object: currentApp
         )
         
+        // Ensure correct size and position BEFORE showing
+        let newSize = NSSize(width: 680, height: 600)
+        window.setContentSize(newSize)
+        centerWindow()
+        
         isVisible = true
         justOpened = true
         
@@ -516,7 +521,6 @@ class WindowManager: NSObject, ObservableObject, NSWindowDelegate {
         window.collectionBehavior = [.canJoinAllSpaces, .stationary, .fullScreenAuxiliary]
         
         // Center and show window
-        centerWindow()
         window.makeKeyAndOrderFront(nil)
         
         // NUCLEAR FOCUS STRATEGY - SAVE THE CATS!
@@ -739,9 +743,9 @@ class WindowManager: NSObject, ObservableObject, NSWindowDelegate {
         DispatchQueue.main.async { [weak self] in
             guard let self = self, let window = self.window else { return }
             
-            // Reset to normal size
-            let normalSize = NSSize(width: 640, height: 72)
-            window.setContentSize(normalSize)
+            // Reset window to normal size
+            let newSize = NSSize(width: 680, height: 600)
+            window.setContentSize(newSize)
             self.centerWindow()
             
             // Hide the window

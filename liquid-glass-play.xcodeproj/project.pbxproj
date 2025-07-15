@@ -11,6 +11,7 @@
 		DFA1DEB92E0FCECE0070E4F5 /* GoogleGenerativeAI in Frameworks */ = {isa = PBXBuildFile; productRef = DFA1DEB82E0FCECE0070E4F5 /* GoogleGenerativeAI */; };
 		DFA1DEC02E0FDB530070E4F5 /* SwiftfulLoadingIndicators in Frameworks */ = {isa = PBXBuildFile; productRef = DFA1DEBF2E0FDB530070E4F5 /* SwiftfulLoadingIndicators */; };
 		DFA1DECC2E0FFF410070E4F5 /* ScreenCaptureKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = DFA1DECB2E0FFF410070E4F5 /* ScreenCaptureKit.framework */; platformFilters = (macos, ); };
+		DFAA7D122E1BBB4700B0DD0C /* Starscream in Frameworks */ = {isa = PBXBuildFile; productRef = DFAA7D112E1BBB4700B0DD0C /* Starscream */; };
 		DFF37E662E1545E40090D06D /* FirebaseAI in Frameworks */ = {isa = PBXBuildFile; productRef = DFF37E652E1545E40090D06D /* FirebaseAI */; };
 		DFF37E682E1545E40090D06D /* FirebaseAnalytics in Frameworks */ = {isa = PBXBuildFile; productRef = DFF37E672E1545E40090D06D /* FirebaseAnalytics */; };
 		DFF37E6A2E1545E40090D06D /* FirebaseAnalyticsCore in Frameworks */ = {isa = PBXBuildFile; productRef = DFF37E692E1545E40090D06D /* FirebaseAnalyticsCore */; };
@@ -63,7 +64,6 @@
 		DF09377B2E0E940800FF89F9 /* SearchFast.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = SearchFast.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		DF0937892E0E940A00FF89F9 /* liquid-glass-playTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "liquid-glass-playTests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
 		DF0937932E0E940A00FF89F9 /* liquid-glass-playUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "liquid-glass-playUITests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
-		DF2A7B0A2E0FAC9100B6C8F7 /* FoundationModels.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = FoundationModels.framework; path = Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS26.0.sdk/System/Library/Frameworks/FoundationModels.framework; sourceTree = DEVELOPER_DIR; };
 		DF345B4C2E183DE800733A41 /* liquid-glass-playLauncherTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "liquid-glass-playLauncherTests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
 		DF345B562E183DE800733A41 /* liquid-glass-playLauncherUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "liquid-glass-playLauncherUITests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
 		DF345B712E184C0E00733A41 /* liquid-glass-playLauncher */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = "liquid-glass-playLauncher"; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -81,8 +81,7 @@
 		DFA1DE772E0FC8B10070E4F5 /* Exceptions for "liquid-glass-play" folder in "liquid-glass-play" target */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
-				"com.kathan.liquid-glass-play.Launcher.plist",
-				Info.plist,
+				Views/Launcher/Info.plist,
 				Views/Launcher/Launcher.swift,
 			);
 			target = DF09377A2E0E940800FF89F9 /* liquid-glass-play */;
@@ -134,6 +133,7 @@
 				DFA1DEB92E0FCECE0070E4F5 /* GoogleGenerativeAI in Frameworks */,
 				DFF37E6A2E1545E40090D06D /* FirebaseAnalyticsCore in Frameworks */,
 				DFF37E662E1545E40090D06D /* FirebaseAI in Frameworks */,
+				DFAA7D122E1BBB4700B0DD0C /* Starscream in Frameworks */,
 				DFF37E722E1546E70090D06D /* FirebaseFirestore in Frameworks */,
 				DFF37E6C2E1545E40090D06D /* FirebaseAnalyticsIdentitySupport in Frameworks */,
 				DFF37E702E1546D20090D06D /* FirebaseAuth in Frameworks */,
@@ -213,7 +213,6 @@
 			isa = PBXGroup;
 			children = (
 				DFA1DECB2E0FFF410070E4F5 /* ScreenCaptureKit.framework */,
-				DF2A7B0A2E0FAC9100B6C8F7 /* FoundationModels.framework */,
 			);
 			name = Frameworks;
 			sourceTree = "<group>";
@@ -248,6 +247,7 @@
 				DFF37E6D2E1545E40090D06D /* FirebaseAnalyticsOnDeviceConversion */,
 				DFF37E6F2E1546D20090D06D /* FirebaseAuth */,
 				DFF37E712E1546E70090D06D /* FirebaseFirestore */,
+				DFAA7D112E1BBB4700B0DD0C /* Starscream */,
 			);
 			productName = "liquid-glass-play";
 			productReference = DF09377B2E0E940800FF89F9 /* SearchFast.app */;
@@ -412,6 +412,7 @@
 				DFA1DEB32E0FCD280070E4F5 /* XCRemoteSwiftPackageReference "generative-ai-swift" */,
 				DFA1DEBE2E0FDB530070E4F5 /* XCRemoteSwiftPackageReference "SwiftfulLoadingIndicators" */,
 				DFF37E642E1545E40090D06D /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */,
+				DFAA7D102E1BBB4700B0DD0C /* XCRemoteSwiftPackageReference "Starscream" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = DF09377C2E0E940800FF89F9 /* Products */;
@@ -579,6 +580,8 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
+				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = YES;
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.productivity";
 				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
 				MTL_FAST_MATH = YES;
@@ -637,6 +640,8 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
+				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = YES;
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.productivity";
 				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
@@ -678,9 +683,12 @@
 				ENABLE_USER_SELECTED_FILES = readwrite;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = "liquid-glass-play/Info.plist";
-				INFOPLIST_KEY_CFBundleDisplayName = Searchfast;
+				INFOPLIST_KEY_CFBundleDisplayName = SearchFast;
 				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.productivity";
+				INFOPLIST_KEY_LSUIElement = YES;
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "This app uses the microphone for voice input to allow you to speak commands and queries instead of typing them. Voice input helps save 2000 cats by providing a faster and more natural interaction method.";
+				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "This app uses speech recognition to convert your voice commands into text for AI processing. Speech recognition enables hands-free operation and helps save 2000 cats by providing seamless voice interaction.";
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphoneos*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphonesimulator*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents[sdk=iphoneos*]" = YES;
@@ -694,7 +702,7 @@
 				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
 				LD_RUNPATH_SEARCH_PATHS = "@executable_path/Frameworks";
 				"LD_RUNPATH_SEARCH_PATHS[sdk=macosx*]" = "@executable_path/../Frameworks";
-				MACOSX_DEPLOYMENT_TARGET = 26.0;
+				MACOSX_DEPLOYMENT_TARGET = 14.6;
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = "com.app.liquid-glass-play";
 				PRODUCT_NAME = SearchFast;
@@ -748,9 +756,12 @@
 				ENABLE_USER_SELECTED_FILES = readwrite;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = "liquid-glass-play/Info.plist";
-				INFOPLIST_KEY_CFBundleDisplayName = Searchfast;
+				INFOPLIST_KEY_CFBundleDisplayName = SearchFast;
 				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.productivity";
+				INFOPLIST_KEY_LSUIElement = YES;
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "This app uses the microphone for voice input to allow you to speak commands and queries instead of typing them. Voice input helps save 2000 cats by providing a faster and more natural interaction method.";
+				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "This app uses speech recognition to convert your voice commands into text for AI processing. Speech recognition enables hands-free operation and helps save 2000 cats by providing seamless voice interaction.";
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphoneos*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphonesimulator*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents[sdk=iphoneos*]" = YES;
@@ -764,7 +775,7 @@
 				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
 				LD_RUNPATH_SEARCH_PATHS = "@executable_path/Frameworks";
 				"LD_RUNPATH_SEARCH_PATHS[sdk=macosx*]" = "@executable_path/../Frameworks";
-				MACOSX_DEPLOYMENT_TARGET = 26.0;
+				MACOSX_DEPLOYMENT_TARGET = 14.6;
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = "com.app.liquid-glass-play";
 				PRODUCT_NAME = SearchFast;
@@ -965,9 +976,25 @@
 			buildSettings = {
 				CODE_SIGN_STYLE = Automatic;
 				DEVELOPMENT_TEAM = 2B794X3YTR;
+				ENABLE_APP_SANDBOX = YES;
+				ENABLE_FILE_ACCESS_DOWNLOADS_FOLDER = readwrite;
+				ENABLE_FILE_ACCESS_MOVIES_FOLDER = readwrite;
+				ENABLE_FILE_ACCESS_MUSIC_FOLDER = readwrite;
+				ENABLE_FILE_ACCESS_PICTURE_FOLDER = readwrite;
 				ENABLE_HARDENED_RUNTIME = YES;
-				MACOSX_DEPLOYMENT_TARGET = 26.0;
-				PRODUCT_BUNDLE_IDENTIFIER = "com.kathan.liquid-glass-play.liquid-glass-playLauncher";
+				ENABLE_INCOMING_NETWORK_CONNECTIONS = YES;
+				ENABLE_OUTGOING_NETWORK_CONNECTIONS = YES;
+				ENABLE_RESOURCE_ACCESS_AUDIO_INPUT = YES;
+				ENABLE_RESOURCE_ACCESS_BLUETOOTH = YES;
+				ENABLE_RESOURCE_ACCESS_CALENDARS = YES;
+				ENABLE_RESOURCE_ACCESS_CAMERA = YES;
+				ENABLE_RESOURCE_ACCESS_CONTACTS = YES;
+				ENABLE_RESOURCE_ACCESS_LOCATION = YES;
+				ENABLE_RESOURCE_ACCESS_PRINTING = YES;
+				ENABLE_RESOURCE_ACCESS_USB = YES;
+				ENABLE_USER_SELECTED_FILES = readwrite;
+				MACOSX_DEPLOYMENT_TARGET = 14.6;
+				PRODUCT_BUNDLE_IDENTIFIER = "com.app.liquid-glass-play.Launcher";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = macosx;
 				SKIP_INSTALL = YES;
@@ -981,9 +1008,25 @@
 			buildSettings = {
 				CODE_SIGN_STYLE = Automatic;
 				DEVELOPMENT_TEAM = 2B794X3YTR;
+				ENABLE_APP_SANDBOX = YES;
+				ENABLE_FILE_ACCESS_DOWNLOADS_FOLDER = readwrite;
+				ENABLE_FILE_ACCESS_MOVIES_FOLDER = readwrite;
+				ENABLE_FILE_ACCESS_MUSIC_FOLDER = readwrite;
+				ENABLE_FILE_ACCESS_PICTURE_FOLDER = readwrite;
 				ENABLE_HARDENED_RUNTIME = YES;
-				MACOSX_DEPLOYMENT_TARGET = 26.0;
-				PRODUCT_BUNDLE_IDENTIFIER = "com.kathan.liquid-glass-play.liquid-glass-playLauncher";
+				ENABLE_INCOMING_NETWORK_CONNECTIONS = YES;
+				ENABLE_OUTGOING_NETWORK_CONNECTIONS = YES;
+				ENABLE_RESOURCE_ACCESS_AUDIO_INPUT = YES;
+				ENABLE_RESOURCE_ACCESS_BLUETOOTH = YES;
+				ENABLE_RESOURCE_ACCESS_CALENDARS = YES;
+				ENABLE_RESOURCE_ACCESS_CAMERA = YES;
+				ENABLE_RESOURCE_ACCESS_CONTACTS = YES;
+				ENABLE_RESOURCE_ACCESS_LOCATION = YES;
+				ENABLE_RESOURCE_ACCESS_PRINTING = YES;
+				ENABLE_RESOURCE_ACCESS_USB = YES;
+				ENABLE_USER_SELECTED_FILES = readwrite;
+				MACOSX_DEPLOYMENT_TARGET = 14.6;
+				PRODUCT_BUNDLE_IDENTIFIER = "com.app.liquid-glass-play.Launcher";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = macosx;
 				SKIP_INSTALL = YES;
@@ -1077,6 +1120,14 @@
 				minimumVersion = 0.0.4;
 			};
 		};
+		DFAA7D102E1BBB4700B0DD0C /* XCRemoteSwiftPackageReference "Starscream" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/daltoniam/Starscream";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 4.0.8;
+			};
+		};
 		DFF37E642E1545E40090D06D /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */ = {
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/firebase/firebase-ios-sdk";
@@ -1097,6 +1148,11 @@
 			isa = XCSwiftPackageProductDependency;
 			package = DFA1DEBE2E0FDB530070E4F5 /* XCRemoteSwiftPackageReference "SwiftfulLoadingIndicators" */;
 			productName = SwiftfulLoadingIndicators;
+		};
+		DFAA7D112E1BBB4700B0DD0C /* Starscream */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = DFAA7D102E1BBB4700B0DD0C /* XCRemoteSwiftPackageReference "Starscream" */;
+			productName = Starscream;
 		};
 		DFF37E652E1545E40090D06D /* FirebaseAI */ = {
 			isa = XCSwiftPackageProductDependency;

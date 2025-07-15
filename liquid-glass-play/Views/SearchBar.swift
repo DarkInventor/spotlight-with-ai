@@ -182,14 +182,17 @@ struct SearchBar: View {
     @Environment(\.colorScheme) private var colorScheme
     @State private var isDragOver = false
     @State private var showingImagePicker = false
+    @State private var isEditing = false
 
     
     var body: some View {
-        if #available(macOS 26.0, *) {
-            HStack(spacing: 14) {
+        // Spotlight-style pill search bar with refined colors
+        HStack(alignment: .center, spacing: 12) {
+            // Search bar pill with enhanced styling matching app search results
+            HStack(spacing: 10) {
                 getCurrentAppIconView()
                     .foregroundColor(Color(NSColor.tertiaryLabelColor))
-                    .font(.system(size: 28, weight: .medium))
+                    .font(.system(size: 22, weight: .medium))
                 
                 FocusableTextField(
                     text: $text,
@@ -198,19 +201,21 @@ struct SearchBar: View {
                     onSubmit: onSubmit
                 )
                 .focused($isFieldFocused)
-
+                .font(.system(size: 22, weight: .regular))
+                .padding(.vertical, 8)
                 
-                Spacer()
+                Spacer(minLength: 0)
                 
                 // Attach icon for image selection
                 Button(action: {
                     showingImagePicker = true
                 }) {
                     Image(systemName: "paperclip")
-                        .foregroundColor(Color(NSColor.tertiaryLabelColor))
-                        .font(.system(size: 18, weight: .medium))
+                        .font(.system(size: 18, weight: .regular))
+                        .foregroundColor(.secondary)
                 }
                 .buttonStyle(.plain)
+                .frame(width: 36, height: 36)
                 .help("Attach image")
                 
                 if !text.isEmpty {
@@ -218,43 +223,88 @@ struct SearchBar: View {
                         text = ""
                     }) {
                         Image(systemName: "xmark.circle.fill")
-                            .foregroundColor(Color(NSColor.tertiaryLabelColor))
                             .font(.system(size: 16, weight: .medium))
+                            .foregroundColor(Color(NSColor.tertiaryLabelColor))
                     }
                     .buttonStyle(.plain)
+                    .background(
+                        Circle()
+                            .fill(colorScheme == .light ? 
+                                  Color.white.opacity(0.8) : 
+                                  Color.black.opacity(0.4))
+                            .shadow(
+                                color: colorScheme == .light ? 
+                                       Color.black.opacity(0.08) : 
+                                       Color.clear, 
+                                radius: 2, 
+                                x: 0, 
+                                y: 1
+                            )
+                    )
+                    .frame(width: 36, height: 36)
                 }
             }
-            .padding(.horizontal, 20)
-            .padding(.vertical, 16)
+            .padding(.horizontal, 18)
+            .padding(.vertical, 6)
             .background(
-                // Use a RoundedRectangle to ensure the glass effect has rounded corners
-                // that match the view's clip shape.
-                RoundedRectangle(cornerRadius: 36)
-                    .fill(colorScheme == .light ? Color.white.opacity(0.4) : Color.clear)
-                    .applyLiquidGlass()
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 36)
-                            .stroke(isDragOver ? Color.blue.opacity(0.8) : Color.clear, lineWidth: 3)
+                Capsule()
+                    .fill(colorScheme == .light ? 
+                          Color.white.opacity(0.8) : 
+                          Color.black.opacity(0.4))
+                    .shadow(
+                        color: colorScheme == .light ? 
+                               Color.black.opacity(0.10) : 
+                               Color.clear, 
+                        radius: 16, 
+                        x: 0, 
+                        y: 6
                     )
-                    .scaleEffect(isDragOver ? 1.02 : 1.0)
-                    .animation(.easeInOut(duration: 0.2), value: isDragOver)
             )
-            .clipShape(RoundedRectangle(cornerRadius: 36)) // Clip the view for rounded corners
-            .onDrop(of: [.image, .fileURL, .data], isTargeted: $isDragOver) { providers in
-                handleDrop(providers: providers)
+            .contentShape(Capsule())
+            .frame(height: 48)
+            
+            // Floating mic button with enhanced styling
+            HStack(spacing: 12) {
+                Button(action: {
+                    NotificationCenter.default.post(name: NSNotification.Name("StartSpeechMode"), object: nil)
+                }) {
+                    Image(systemName: "mic")
+                        .font(.system(size: 18, weight: .regular))
+                        .foregroundColor(.secondary)
+                        .frame(width: 48, height: 48)
+                }
+                .buttonStyle(.plain)
+                .background(
+                    Circle()
+                        .fill(colorScheme == .light ? 
+                              Color.white.opacity(0.8) : 
+                              Color.black.opacity(0.4))
+                        .shadow(
+                            color: colorScheme == .light ? 
+                                   Color.black.opacity(0.1) : 
+                                   Color.clear, 
+                            radius: 3, 
+                            x: 0, 
+                            y: 2
+                        )
+                )
+                .frame(width: 48, height: 48)
             }
-            .onReceive(NotificationCenter.default.publisher(for: Notification.Name("FocusSearchField"))) { _ in
-                isFieldFocused = true
-            }
-            .fileImporter(
-                isPresented: $showingImagePicker,
-                allowedContentTypes: [.image],
-                allowsMultipleSelection: false
-            ) { result in
-                handleFileSelection(result: result)
-            }
-        } else {
-            // Fallback on earlier versions
+        }
+        .padding(.horizontal, 18)
+        .padding(.vertical, 18)
+        .onDrop(of: [.image, .fileURL, .data], isTargeted: $isDragOver) { providers in
+            handleDrop(providers: providers)
+        }
+        .onReceive(NotificationCenter.default.publisher(for: Notification.Name("FocusSearchField"))) { _ in
+            isFieldFocused = true
+        }
+        .fileImporter(
+            isPresented: $showingImagePicker,
+            allowedContentTypes: [.image],
+            allowsMultipleSelection: false
+        ) { result in
+            handleFileSelection(result: result)
         }
     }
     

@@ -3,7 +3,7 @@
 <plist version="1.0">
 <dict>
 	<key>Label</key>
-	<string>com.kathan.liquid-glass-play.Launcher</string>
+	<string>com.app.liquid-glass-play.Launcher</string>
 	<key>ProgramArguments</key>
 	<array>
 		<string>/usr/bin/open</string>

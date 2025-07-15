@@ -1,5 +1,5 @@
 {
-  "originHash" : "24dd0502daaf0f19e028a9b809e3786f3b87dbf39a3eab85829846c2094f57d2",
+  "originHash" : "589327f17653ed33bda896d75d0362f2d8a67f371dc32133d46d36e416c599e5",
   "pins" : [
     {
       "identity" : "abseil-cpp-binary",
@@ -125,6 +125,15 @@
       "state" : {
         "revision" : "540318ecedd63d883069ae7f1ed811a2df00b6ac",
         "version" : "2.4.0"
+      }
+    },
+    {
+      "identity" : "starscream",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/daltoniam/Starscream",
+      "state" : {
+        "revision" : "c6bfd1af48efcc9a9ad203665db12375ba6b145a",
+        "version" : "4.0.8"
       }
     },
     {

@@ -4,7 +4,7 @@ import AppKit
 class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
-        let mainAppBundleId = "com.kathan.liquid-glass-play"
+        let mainAppBundleId = "com.app.liquid-glass-play"
         
         let runningApps = NSWorkspace.shared.runningApplications
         let isMainAppRunning = runningApps.contains {

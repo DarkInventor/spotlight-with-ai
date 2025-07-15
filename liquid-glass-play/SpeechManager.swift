@@ -1,407 +1,239 @@
 import Foundation
-import Speech
 import AVFoundation
+import Speech
 import SwiftUI
-
-#if canImport(AppKit)
-import AppKit
-#endif
 
 @MainActor
 class SpeechManager: NSObject, ObservableObject {
-    @Published var isRecording = false
-    @Published var isListening = false
     @Published var recognizedText = ""
+    @Published var isRecording = false
     @Published var speechError: String?
-    @Published var hasPermission = false
-    @Published var animationValue: Double = 0.0
     @Published var isSpeaking = false
-    @Published var autoStopTimer: Timer?
     
     private var speechRecognizer: SFSpeechRecognizer?
     private var recognitionRequest: SFSpeechAudioBufferRecognitionRequest?
     private var recognitionTask: SFSpeechRecognitionTask?
     private var audioEngine = AVAudioEngine()
-    private var animationTimer: Timer?
+    private var audioPlayer = AVPlayer()
     private var silenceTimer: Timer?
-    private var lastSpeechTime = Date()
-    private var speechSynthesizer = AVSpeechSynthesizer()
+    private var fullTranscript = ""
     
-    // Constants for auto-stop
-    private let silenceTimeout: TimeInterval = 2.0 // 2 seconds of silence
-    private let minSpeechLength = 3 // Minimum characters to process
+    private let deepgramAPIKey = APIKey.deepgram
+    private let ttsModel = "aura-luna-en"
     
-            override init() {
+    override init() {
         super.init()
+        setupSpeechRecognizer()
+    }
+    
+    // MARK: - Setup
+    
+    private func setupSpeechRecognizer() {
         speechRecognizer = SFSpeechRecognizer(locale: Locale(identifier: "en-US"))
         speechRecognizer?.delegate = self
-        speechSynthesizer.delegate = self
         
-        // Request permissions on init
-        Task {
-            await requestPermissions()
+        // Request authorization
+        SFSpeechRecognizer.requestAuthorization { [weak self] authStatus in
+            DispatchQueue.main.async {
+                switch authStatus {
+                case .authorized:
+                    print("✅ Speech recognition authorized")
+                case .denied:
+                    self?.speechError = "Speech recognition access denied"
+                case .restricted:
+                    self?.speechError = "Speech recognition restricted"
+                case .notDetermined:
+                    self?.speechError = "Speech recognition not determined"
+                @unknown default:
+                    self?.speechError = "Unknown speech recognition error"
+                }
+            }
         }
     }
     
-    deinit {
-        // For deinit, we need to avoid async calls. Just clean up directly.
-        audioEngine.stop()
-        if audioEngine.inputNode.numberOfInputs > 0 {
-            audioEngine.inputNode.removeTap(onBus: 0)
-        }
-        recognitionRequest?.endAudio()
+    // MARK: - Public Methods
+    
+    func startRecording() {
+        guard !isRecording else { return }
+        
+        // Cancel any existing task
         recognitionTask?.cancel()
-        animationTimer?.invalidate()
-    }
-    
-    // MARK: - Permission Management
-    
-    func requestPermissions() async {
-        print("🎤 Requesting Speech Recognition Permissions...")
+        recognitionTask = nil
         
-        // Request speech recognition permission
-        let speechStatus = await withCheckedContinuation { continuation in
-            SFSpeechRecognizer.requestAuthorization { status in
-                continuation.resume(returning: status)
-            }
-        }
-        
-        // Request microphone permission - using different approach for macOS
-        let micStatus: Bool
-        #if os(macOS)
-        // On macOS, microphone permission is handled by system preferences
-        // We'll assume permission is granted if we can create audio engine
-        micStatus = true
-        #else
-        micStatus = await withCheckedContinuation { continuation in
-            AVAudioSession.sharedInstance().requestRecordPermission { granted in
-                continuation.resume(returning: granted)
-            }
-        }
-        #endif
-        
-        await MainActor.run {
-            hasPermission = speechStatus == .authorized && micStatus
-            if hasPermission {
-                print("✅ Speech permissions granted!")
-            } else {
-                print("❌ Speech permissions denied")
-                speechError = "Speech recognition requires microphone and speech recognition permissions"
-            }
-        }
-    }
-    
-    // MARK: - Speech Recognition
-    
-    func startRecording() async {
-        guard hasPermission else {
-            speechError = "Permission required for speech recognition"
+        // Create recognition request
+        recognitionRequest = SFSpeechAudioBufferRecognitionRequest()
+        guard let recognitionRequest = recognitionRequest else {
+            self.speechError = "Unable to create recognition request"
             return
         }
         
-        guard !isRecording else { return }
+        recognitionRequest.shouldReportPartialResults = true
         
-        print("🎤 Starting speech recognition...")
+        // Setup audio engine
+        let inputNode = audioEngine.inputNode
+        let recordingFormat = inputNode.outputFormat(forBus: 0)
+        
+        inputNode.installTap(onBus: 0, bufferSize: 1024, format: recordingFormat) { [weak self] (buffer, when) in
+            self?.recognitionRequest?.append(buffer)
+        }
+        
+        audioEngine.prepare()
         
         do {
-            // Stop any existing recording first
-            await stopRecordingGracefully()
-            
-            // Small delay to ensure clean state
-            try await Task.sleep(nanoseconds: 100_000_000) // 0.1 second
-            
-            // Configure audio session - only on iOS
-            #if !os(macOS)
-            let audioSession = AVAudioSession.sharedInstance()
-            try audioSession.setCategory(.record, mode: .measurement, options: .duckOthers)
-            try audioSession.setActive(true, options: .notifyOthersOnDeactivation)
-            #endif
-            
-            // Create recognition request
-            recognitionRequest = SFSpeechAudioBufferRecognitionRequest()
-            guard let recognitionRequest = recognitionRequest else {
-                speechError = "Unable to create recognition request"
-                return
-            }
-            
-            recognitionRequest.shouldReportPartialResults = true
-            recognitionRequest.requiresOnDeviceRecognition = false // Allow cloud processing for better accuracy
-            
-            // Configure audio engine with error handling
-            let inputNode = audioEngine.inputNode
-            let recordingFormat = inputNode.outputFormat(forBus: 0)
-            
-            // Use smaller buffer size to reduce overload
-            inputNode.installTap(onBus: 0, bufferSize: 512, format: recordingFormat) { buffer, _ in
-                recognitionRequest.append(buffer)
-            }
-            
-            // Start audio engine with retry logic
-            audioEngine.prepare()
             try audioEngine.start()
-            
-            // Create recognition task with proper error handling
-            recognitionTask = speechRecognizer?.recognitionTask(with: recognitionRequest) { [weak self] result, error in
-                Task { @MainActor in
-                    guard let self = self else { return }
-                    
-                    if let result = result {
-                        // Handle successful recognition
-                        let transcription = result.bestTranscription.formattedString
-                        self.recognizedText = transcription
-                        self.lastSpeechTime = Date()
-                        print("🎤 Recognized: \(transcription)")
-                        
-                        // Reset and start silence timer for auto-stop
-                        self.resetSilenceTimer()
-                        self.startSilenceTimer()
-                        
-                        // If speech is final and we have meaningful text, prepare to auto-stop
-                        if result.isFinal && transcription.count >= self.minSpeechLength {
-                            print("🎤 Final result detected - will auto-stop after silence")
-                        }
-                    }
-                    
-                    if let error = error {
-                        print("❌ Speech recognition error: \(error)")
-                        
-                        // Handle specific error codes
-                        let nsError = error as NSError
-                        if nsError.domain == "kAFAssistantErrorDomain" && nsError.code == 216 {
-                            // Assistant framework conflict - reset and continue
-                            print("🔄 Assistant framework conflict detected, resetting...")
-                            self.speechError = nil
-                            
-                            Task {
-                                await self.stopRecordingGracefully()
-                                try? await Task.sleep(nanoseconds: 250_000_000) // 0.25 second
-                            }
-                        } else if nsError.code == -10877 {
-                            // Audio engine error - reset audio session
-                            print("🔄 Audio engine error, resetting audio...")
-                            self.speechError = nil
-                            
-                            Task {
-                                await self.stopRecordingGracefully()
-                            }
-                        } else if !error.localizedDescription.contains("canceled") {
-                            // Only show error if it's not a cancellation (which is expected)
-                            self.speechError = error.localizedDescription
-                            self.stopRecording()
-                        }
-                    }
-                }
-            }
-            
-            isRecording = true
-            isListening = true
-            speechError = nil
-            recognizedText = ""
-            startSpeechAnimation()
-            
-            print("✅ Speech recognition started")
-            
+            print("✅ Audio engine started successfully")
         } catch {
-            print("❌ Failed to start recording: \(error)")
-            speechError = error.localizedDescription
-            stopRecording()
-        }
-    }
-    
-    func stopRecording() {
-        Task { @MainActor in
-            await stopRecordingGracefully()
-        }
-    }
-    
-    private func stopRecordingGracefully() async {
-        print("🛑 Stopping speech recognition...")
-        
-        // Stop silence timer
-        resetSilenceTimer()
-        
-        // Stop audio engine gracefully
-        if audioEngine.isRunning {
-            audioEngine.stop()
+            print("❌ Audio engine failed to start: \(error)")
+            self.speechError = "Audio engine failed to start"
+            return
         }
         
-        // Remove tap if it exists
-        if audioEngine.inputNode.numberOfInputs > 0 {
-            do {
-                audioEngine.inputNode.removeTap(onBus: 0)
-            } catch {
-                print("⚠️ Could not remove audio tap: \(error)")
-            }
-        }
-        
-        // End recognition gracefully
-        recognitionRequest?.endAudio()
-        recognitionRequest = nil
-        
-        recognitionTask?.finish()
-        recognitionTask = nil
-        
-        await MainActor.run {
-            isRecording = false
-            isListening = false
-            stopSpeechAnimation()
-        }
-        
-        // Deactivate audio session - only on iOS
-        #if !os(macOS)
-        try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
-        #endif
-        
-        print("✅ Speech recognition stopped")
-    }
-    
-    func cancelRecording() {
-        recognizedText = ""
-        resetSilenceTimer()
-        stopRecording()
-    }
-    
-    // MARK: - Speech Animation
-    
-    private func startSpeechAnimation() {
-        animationTimer?.invalidate()
-        animationTimer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { [weak self] _ in
-            Task { @MainActor in
-                withAnimation(.easeInOut(duration: 0.3)) {
-                    self?.animationValue = Double.random(in: 0.3...1.0)
-                }
-            }
-        }
-    }
-    
-    private func stopSpeechAnimation() {
-        animationTimer?.invalidate()
-        animationTimer = nil
-        withAnimation(.easeOut(duration: 0.5)) {
-            animationValue = 0.0
-        }
-    }
-    
-    // MARK: - Auto-Stop Timer Management
-    
-    private func startSilenceTimer() {
-        resetSilenceTimer()
-        
-        silenceTimer = Timer.scheduledTimer(withTimeInterval: silenceTimeout, repeats: false) { [weak self] _ in
-            Task { @MainActor in
-                guard let self = self else { return }
-                
-                // Check if we have meaningful speech and enough time has passed
-                let speechText = self.recognizedText.trimmingCharacters(in: .whitespacesAndNewlines)
-                let timeSinceLastSpeech = Date().timeIntervalSince(self.lastSpeechTime)
-                
-                if self.isRecording && speechText.count >= self.minSpeechLength && timeSinceLastSpeech >= self.silenceTimeout {
-                    print("🎤 Auto-stopping due to silence timeout with text: '\(speechText)'")
-                    self.stopRecording()
+        // Start recognition
+        recognitionTask = speechRecognizer?.recognitionTask(with: recognitionRequest) { [weak self] result, error in
+            guard let self = self else { return }
+            
+            DispatchQueue.main.async {
+                if let result = result {
+                    let newText = result.bestTranscription.formattedString
+                    self.recognizedText = newText
                     
-                    // Post notification to process the speech
-                    NotificationCenter.default.post(
-                        name: NSNotification.Name("AutoProcessSpeech"),
-                        object: speechText
-                    )
+                    // Only start/reset the silence timer if we have actual speech content
+                    if !newText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                        print("🎤 Speech detected: '\(newText)' - Starting/resetting silence timer")
+                        self.resetSilenceTimer()
+                    }
+                    
+                    // If the result is final, update full transcript
+                    if result.isFinal {
+                        self.fullTranscript = newText
+                    }
+                }
+                
+                if let error = error {
+                    print("❌ Speech recognition error: \(error)")
+                    self.stopRecording()
                 }
             }
+        }
+        
+        recognizedText = ""
+        fullTranscript = ""
+        isRecording = true
+        // DON'T start the silence timer immediately - wait for speech to be detected first
+        
+        print("✅ Speech recognition started - listening for speech...")
+    }
+
+    func stopRecording() {
+        if isRecording {
+            audioEngine.stop()
+            audioEngine.inputNode.removeTap(onBus: 0)
+            recognitionRequest?.endAudio()
+            recognitionTask?.cancel()
+            
+            isRecording = false
+            silenceTimer?.invalidate()
+            
+            // Finalize the transcript
+            let finalText = fullTranscript.isEmpty ? recognizedText : fullTranscript
+            recognizedText = finalText
+            
+            // Post notification for auto-processing
+            NotificationCenter.default.post(
+                name: NSNotification.Name("AutoProcessSpeech"), 
+                object: finalText.isEmpty ? nil : finalText
+            )
+            
+            print("✅ Speech recognition stopped. Final text: '\(finalText)'")
+        }
+    }
+
+    func cancelRecording() {
+        if isRecording {
+            audioEngine.stop()
+            audioEngine.inputNode.removeTap(onBus: 0)
+            recognitionRequest?.endAudio()
+            recognitionTask?.cancel()
+            
+            isRecording = false
+            silenceTimer?.invalidate()
+            
+            // Clear transcripts
+            fullTranscript = ""
+            recognizedText = ""
+            
+            print("🎤 Speech recognition cancelled")
+        }
+    }
+
+    func speak(text: String) {
+        guard let url = URL(string: "https://api.deepgram.com/v1/speak?model=\(ttsModel)") else { return }
+        
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("Token \(deepgramAPIKey)", forHTTPHeaderField: "Authorization")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        
+        let payload = ["text": text]
+        request.httpBody = try? JSONSerialization.data(withJSONObject: payload, options: [])
+        
+        isSpeaking = true
+        
+        let task = URLSession.shared.dataTask(with: request) { [weak self] data, response, error in
+            DispatchQueue.main.async {
+                self?.isSpeaking = false
+                if let error = error {
+                    self?.speechError = "TTS Error: \(error.localizedDescription)"
+                    return
+                }
+                
+                guard let data = data else {
+                    self?.speechError = "TTS Error: No data received"
+                    return
+                }
+                
+                self?.playAudio(data: data)
+            }
+        }
+        task.resume()
+    }
+    
+    // MARK: - Private Helpers
+    
+    private func playAudio(data: Data) {
+        do {
+            let tempURL = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString).appendingPathExtension("mp3")
+            try data.write(to: tempURL)
+            let playerItem = AVPlayerItem(url: tempURL)
+            audioPlayer.replaceCurrentItem(with: playerItem)
+            audioPlayer.play()
+        } catch {
+            speechError = "Failed to play audio: \(error.localizedDescription)"
         }
     }
     
     private func resetSilenceTimer() {
         silenceTimer?.invalidate()
-        silenceTimer = nil
-    }
-    
-    // MARK: - Text-to-Speech
-    
-    @MainActor
-    func speak(_ text: String) {
-        guard !text.isEmpty else { return }
-        
-        print("🗣️ Speaking: \(text)")
-        
-        // Stop any current speech first
-        if speechSynthesizer.isSpeaking {
-            speechSynthesizer.stopSpeaking(at: .immediate)
+        silenceTimer = Timer.scheduledTimer(withTimeInterval: 2.0, repeats: false) { [weak self] _ in
+            guard let self = self, self.isRecording else { return }
+            
+            print("🎤 Silence detected (2 seconds), auto-submitting")
+            self.stopRecording()
         }
-        
-        isSpeaking = true
-        
-        let utterance = AVSpeechUtterance(string: text)
-        utterance.rate = 0.45 // Slightly slower for clarity and more natural sound
-        utterance.pitchMultiplier = 1.0
-        utterance.volume = 0.75
-        
-        // Use higher quality voice if available
-        if let voice = AVSpeechSynthesisVoice(language: "en-US") {
-            // Try to find a premium voice
-            let voices = AVSpeechSynthesisVoice.speechVoices()
-            if let premiumVoice = voices.first(where: { $0.language == "en-US" && $0.quality == .enhanced }) {
-                utterance.voice = premiumVoice
-            } else {
-                utterance.voice = voice
-            }
-        }
-        
-        // Perform speech synthesis on main thread to avoid concurrency issues
-        speechSynthesizer.speak(utterance)
-    }
-    
-    func stopSpeaking() {
-        speechSynthesizer.stopSpeaking(at: .immediate)
-        isSpeaking = false
-    }
-    
-    // MARK: - Utility
-    
-    func clearText() {
-        recognizedText = ""
-        speechError = nil
-        resetSilenceTimer()
-    }
-    
-    var isAvailable: Bool {
-        return speechRecognizer?.isAvailable == true
     }
 }
 
 // MARK: - SFSpeechRecognizerDelegate
 
 extension SpeechManager: SFSpeechRecognizerDelegate {
-    nonisolated func speechRecognizer(_ speechRecognizer: SFSpeechRecognizer, availabilityDidChange available: Bool) {
-        Task { @MainActor in
-            self.hasPermission = available
-            print("🎤 Speech recognizer availability changed: \(available)")
-        }
-    }
-}
-
-// MARK: - Speech Recognition Task Handling
-// Note: SFSpeechRecognitionTask doesn't support delegates, 
-// so we handle everything in the completion handler above
-
-// MARK: - AVSpeechSynthesizerDelegate
-
-extension SpeechManager: AVSpeechSynthesizerDelegate {
-    nonisolated func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didStart utterance: AVSpeechUtterance) {
-        Task { @MainActor in
-            self.isSpeaking = true
-        }
-    }
-    
-    nonisolated func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didFinish utterance: AVSpeechUtterance) {
-        Task { @MainActor in
-            self.isSpeaking = false
-            print("🗣️ Finished speaking")
-        }
-    }
-    
-    nonisolated func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didCancel utterance: AVSpeechUtterance) {
-        Task { @MainActor in
-            self.isSpeaking = false
-            print("🗣️ Speech canceled")
+    func speechRecognizer(_ speechRecognizer: SFSpeechRecognizer, availabilityDidChange available: Bool) {
+        DispatchQueue.main.async {
+            if available {
+                print("✅ Speech recognizer is available")
+            } else {
+                print("❌ Speech recognizer is not available")
+                self.speechError = "Speech recognizer is not available"
+            }
         }
     }
 } 

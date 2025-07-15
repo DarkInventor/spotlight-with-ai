@@ -4,5 +4,7 @@
 <dict>
 	<key>API_KEY</key>
 	<string>AIzaSyDIxq05RXMLkt_R3zXoPmr9ku0gEsj4UZA</string>
+	<key>DEEPGRAM_API_KEY</key>
+	<string>3dd3bf09eb229eeba036555f85e3cd5fde97d5ef</string>
 </dict>
 </plist>

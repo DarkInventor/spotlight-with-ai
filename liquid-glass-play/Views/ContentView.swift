@@ -56,7 +56,7 @@ struct ContentView: View {
     
     // Before running, please ensure you have added the GoogleGenerativeAI package.
     // In Xcode: File > Add Package Dependencies... > https://github.com/google/generative-ai-swift
-    private let model = GenerativeModel(name: "gemini-1.5-flash", apiKey: APIKey.default)
+    private let model = GenerativeModel(name: "gemini-2.5-flash", apiKey: APIKey.default)
 
     var body: some View {
         ZStack {
@@ -72,7 +72,8 @@ struct ContentView: View {
                     .zIndex(1000) // Ensure onboarding is on top
             }
         }
-        .animation(.easeInOut(duration: 0.4), value: showingOnboarding)
+        // REMOVED: .background(Color.clear) or any .liquidGlassSpotlight() here
+        .animation(.spring(response: 0.6, dampingFraction: 0.8), value: showingOnboarding)
         .onAppear {
             checkOnboardingStatus()
         }
@@ -130,435 +131,8 @@ struct ContentView: View {
                 windowManager.hideOnboardingWindow()
             }
         }
-    }
-    
-    // 🎯 EXTRACTED: Main content view for cleaner code organization
-    private var mainContentView: some View {
-        VStack(spacing: 16) {
-            VStack(spacing: 8) {
-                // Search bar with screenshot and speech buttons - unified layout
-                HStack(spacing: 12) {
-                    // Main input area (SearchBar or Speech Animation)
-                    ZStack {
-                        // SearchBar - always present in layout but conditionally visible
-                        SearchBar(text: $searchText, onSubmit: handleSearch, onImageDrop: handleImageDrop, contextManager: contextManager)
-                            .frame(maxWidth: .infinity)
-                            .onChange(of: searchText) { newValue in
-                                handleUniversalSearchTextChange(newValue)
-                            }
-                            .opacity(isSpeechMode ? 0 : 1)
-                            .scaleEffect(isSpeechMode ? 0.95 : 1)
-                            .disabled(isSpeechMode)
-                        
-                        // Speech Animation - overlay when in speech mode
-                        if isSpeechMode {
-                            SpeechAnimationView(speechManager: speechManager)
-                                .frame(maxWidth: .infinity)
-                                .onTapGesture {
-                                    handleSpeechToggle()
-                                }
-                                .opacity(isSpeechMode ? 1 : 0)
-                                .scaleEffect(isSpeechMode ? 1 : 0.95)
-                        }
-                    }
-                    .animation(.easeInOut(duration: 0.25), value: isSpeechMode)
-                    
-                    // Right side buttons - always present with conditional visibility
-                    HStack(spacing: 12) {
-                        // Screenshot button - hidden in speech mode
-                        if !isSpeechMode {
-                            Button(action: captureScreenshot) {
-                                ZStack {
-                                    Circle()
-                                        .fill(isCapturingScreenshot ? Color.green.opacity(0.2) : Color.gray.opacity(0.1))
-                                        .frame(width: 46, height: 46)
-                                        .overlay(
-                                            Circle()
-                                                .stroke(isCapturingScreenshot ? Color.green : Color.gray.opacity(0.3), lineWidth: 1)
-                                        )
-                                    
-                                    if isCapturingScreenshot {
-                                        ProgressView()
-                                            .scaleEffect(0.7)
-                                            .progressViewStyle(CircularProgressViewStyle(tint: .green))
-                                    } else {
-                                        Image(systemName: selectedImage != nil ? "camera.fill" : "camera")
-                                            .font(.system(size: 20, weight: .medium))
-                                            .foregroundColor(selectedImage != nil ? Color.primary : Color.secondary)
-                                            .padding()
-                                            .glassEffect()
-                                            .onHover { isHovered in
-                                                withAnimation(.easeInOut(duration: 0.2)) {
-                                                    // You can add hover state management here if needed
-                                                }
-                                            }
-                                    }
-                                }
-                            }
-                            .buttonStyle(PlainButtonStyle())
-                            .disabled(isCapturingScreenshot)
-                            .help("Capture Screenshot")
-                            .transition(.opacity.combined(with: .scale))
-                        }
-                        
-                        // Speech/Cancel button - always present but changes function
-                        Button(action: {
-                            if isSpeechMode {
-                                cancelSpeechMode()
-                            } else {
-                                enterSpeechMode()
-                            }
-                        }) {
-                            ZStack {
-                                Circle()
-                                    .fill(isSpeechMode ? Color.red.opacity(0.2) : speechManager.isRecording ? Color.blue.opacity(0.2) : Color.gray.opacity(0.1))
-                                    .frame(width: 46, height: 46)
-                                    .overlay(
-                                        Circle()
-                                            .stroke(isSpeechMode ? Color.red.opacity(0.6) : speechManager.isRecording ? Color.blue : Color.gray.opacity(0.3), lineWidth: 1)
-                                    )
-                                
-                                Image(systemName: isSpeechMode ? "xmark" : speechManager.hasPermission ? "mic.fill" : "mic")
-                                    .font(.system(size: 20, weight: .medium))
-                                    .foregroundColor(isSpeechMode ? Color.secondary : speechManager.hasPermission ? Color.primary : Color.secondary)
-                                    .padding()
-                                    .glassEffect()
-                                    .onHover { isHovered in
-                                        withAnimation(.easeInOut(duration: 0.2)) {
-                                            // You can add hover state management here if needed
-                                        }
-                                    }
-                            }
-                        }
-                        .buttonStyle(PlainButtonStyle())
-                        .disabled(!isSpeechMode && (!speechManager.hasPermission || speechManager.isRecording))
-                        .help(isSpeechMode ? "Cancel Speech" : speechManager.hasPermission ? "Voice Input" : "Speech permission required")
-                    }
-                    .animation(.easeInOut(duration: 0.25), value: isSpeechMode)
-                }
-                .padding(.horizontal, 20)
-                
-                // Show attachment indicators
-                HStack(spacing: 8) {
-                    // Manual screenshot attachment
-                    if let selectedImage = selectedImage {
-                        HStack(spacing: 4) {
-                            Image(systemName: "paperclip")
-                                .font(.system(size: 10))
-                                .foregroundColor(Color.secondary)
-                            
-                            Image(nsImage: selectedImage)
-                                .resizable()
-                                .aspectRatio(contentMode: .fill)
-                                .frame(width: 16, height: 16)
-                                .cornerRadius(3)
-                                .clipped()
-                            
-                            Text("Manual")
-                                .font(.system(size: 8))
-                                .foregroundColor(.secondary)
-                        }
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 4)
-                        .background(Color.blue.opacity(0.1))
-                        .cornerRadius(8)
-                        
-                        Button(action: {
-                            withAnimation {
-                                self.selectedImage = nil
-                            }
-                        }) {
-                            Image(systemName: "xmark.circle.fill")
-                                .font(.system(size: 12))
-                                .foregroundColor(.gray.opacity(0.6))
-                        }
-                        .buttonStyle(PlainButtonStyle())
-                    }
-                    
-                    // Auto-screenshot indicator
-                    if let autoScreenshot = autoScreenshot {
-                        HStack(spacing: 4) {
-                            Image(systemName: "camera.fill")
-                                .font(.system(size: 10))
-                                .foregroundColor(.green)
-                            
-                            Image(nsImage: autoScreenshot)
-                                .resizable()
-                                .aspectRatio(contentMode: .fill)
-                                .frame(width: 16, height: 16)
-                                .cornerRadius(3)
-                                .clipped()
-                            
-                            Text("Auto-captured")
-                                .font(.system(size: 8))
-                                .foregroundColor(.green)
-                        }
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 4)
-                        .background(Color.green.opacity(0.1))
-                        .cornerRadius(8)
-                        
-                        Button(action: {
-                            withAnimation {
-                                self.autoScreenshot = nil
-                            }
-                        }) {
-                            Image(systemName: "xmark.circle.fill")
-                                .font(.system(size: 12))
-                                .foregroundColor(.gray.opacity(0.6))
-                        }
-                        .buttonStyle(PlainButtonStyle())
-                    }
-                    
-                    Spacer()
-                }
-                .padding(.horizontal, 20)
-                .padding(.vertical, 2)
-                .opacity((selectedImage != nil || autoScreenshot != nil) ? 1 : 0)
-            }
-
-            ZStack {
-                ScrollView {
-                    VStack(spacing: 16) {
-                        // Debug: Show current context and automation capabilities
-                        // if let context = contextManager.currentContext {
-                        //     VStack(alignment: .leading, spacing: 4) {
-                        //         Text("📍 Context: \(context.detectedActivity)")
-                        //             .font(.caption)
-                        //             .foregroundColor(.secondary)
-                        //         Text("🖥️ App: \(context.appName)")
-                        //             .font(.caption)
-                        //             .foregroundColor(.secondary)
-                        //         if !context.windowTitle.isEmpty && context.windowTitle != "Unknown" {
-                        //             Text("🪟 Window: \(context.windowTitle)")
-                        //                 .font(.caption)
-                        //                 .foregroundColor(.secondary)
-                        //         }
-                                
-                        //         // Show automation capability
-                        //         HStack {
-                        //             if automationManager.canAutomateApp(context.appName) {
-                        //                 Image(systemName: "checkmark.circle.fill")
-                        //                     .foregroundColor(.green)
-                        //                     .font(.caption)
-                        //                 Text("Automation supported")
-                        //                     .font(.caption)
-                        //                     .foregroundColor(.green)
-                        //             } else {
-                        //                 Image(systemName: "exclamationmark.circle.fill")
-                        //                     .foregroundColor(.orange)
-                        //                     .font(.caption)
-                        //                 Text("Basic automation only")
-                        //                     .font(.caption)
-                        //                     .foregroundColor(.orange)
-                        //             }
-                        //         }
-                                
-                        //         HStack {
-                        //             Button("🔄 Refresh Context") {
-                        //                 Task {
-                        //                     await contextManager.captureCurrentContext()
-                        //                 }
-                        //             }
-                        //             .font(.caption)
-                        //             .buttonStyle(.borderless)
-                                    
-                        //             Button("🤖 Show Supported Apps") {
-                        //                 let apps = automationManager.getSupportedApps().joined(separator: ", ")
-                        //                 print("🤖 Supported Apps: \(apps)")
-                        //             }
-                        //             .font(.caption)
-                        //             .buttonStyle(.borderless)
-                        //         }
-                        //     }
-                        //     .padding(8)
-                        //     .background(Color.secondary.opacity(0.1))
-                        //     .cornerRadius(8)
-                        // }
-                        
-                        // Universal search results (shown above AI response when searching)
-                        if showingUniversalResults {
-                            VStack {
-                                if !universalSearchManager.searchResults.isEmpty {
-                                    UniversalSearchResultsView(
-                                        categoryResults: universalSearchManager.searchResults,
-                                        onResultSelected: handleUniversalResultSelection
-                                                                    )
-                                .background(Color.clear)
-                                .liquidGlassRect(cornerRadius: 16.0)
-                                .animation(.easeInOut(duration: 0.3), value: universalSearchManager.searchResults.count)
-                                    
-                                    if !searchText.isEmpty {
-                                        Button(action: {
-                                            // Continue with AI search instead
-                                            generateResponse()
-                                        }) {
-                                            HStack {
-                                                Image(systemName: "brain")
-                                                    .font(.system(size: 12))
-                                                Text("Ask AI instead: \"\(searchText)\"")
-                                                    .font(.system(size: 14))
-                                            }
-                                            .foregroundColor(.blue)
-                                            .padding(.horizontal, 16)
-                                            .padding(.vertical, 8)
-                                            .background(Color.blue.opacity(0.1))
-                                            .cornerRadius(20)
-                                        }
-                                        .buttonStyle(.plain)
-                                    }
-                                }
-                            }
-                        }
-                        
-                        // AI Response area
-                        VStack(spacing: 12) {
-                            ZStack(alignment: .topTrailing) {
-                                Text(response)
-                                    .font(.system(size: 16, weight: .regular))
-                                    .lineLimit(nil)
-                                    .multilineTextAlignment(.leading)
-                                    .frame(maxWidth: .infinity, alignment: .leading)
-                                    .fixedSize(horizontal: false, vertical: true)
-                                    .textSelection(.enabled)
-                                    .padding()
-                                    .background(Color.clear)
-                                    .liquidGlassRect(cornerRadius: 16.0)
-                                    .animation(.easeInOut(duration: 0.3), value: response)
-                                
-                                Button(action: copyResponse) {
-                                    Image(systemName: isCopied ? "checkmark" : "doc.on.doc")
-                                        .foregroundColor(isCopied ? .green : (colorScheme == .light ? Color.black.opacity(0.7) : Color.white.opacity(0.6)))
-                                        .font(.system(size: 12, weight: .medium))
-                                        .padding(4)
-                                }
-                                .buttonStyle(PlainButtonStyle())
-                                .opacity(responseText == "How can I help you today?" ? 0 : 1)
-                                .padding(.top, 8)
-                                .padding(.trailing, 8)
-                            }
-                            
-                            // Smart "Write to App" button with automation capabilities
-                            if shouldWriteToApp, let context = contextManager.currentContext {
-                                VStack(spacing: 8) {
-                                    Button(action: writeToCurrentApp) {
-                                        HStack {
-                                            if automationManager.isAutomating {
-                                                ProgressView()
-                                                    .scaleEffect(0.8)
-                                                    .foregroundColor(.white)
-                                            } else {
-                                                Image(systemName: getAutomationIcon(for: context.appName))
-                                                    .font(.system(size: 14))
-                                            }
-                                            
-                                            Text(automationManager.isAutomating ? "Writing..." : "Write to \(context.appName)")
-                                                .font(.system(size: 14, weight: .medium))
-                                        }
-                                        .foregroundColor(.white)
-                                        .padding(.horizontal, 20)
-                                        .padding(.vertical, 10)
-                                        .background(
-                                            LinearGradient(
-                                                gradient: Gradient(colors: getAutomationColors(for: context.appName)),
-                                                startPoint: .leading,
-                                                endPoint: .trailing
-                                            )
-                                        )
-                                        .cornerRadius(20)
-                                        .shadow(color: .blue.opacity(0.3), radius: 8, x: 0, y: 4)
-                                    }
-                                    .buttonStyle(.plain)
-                                    .disabled(automationManager.isAutomating)
-                                    
-                                    // Show automation strategy
-                                    if let capabilities = automationManager.getAutomationCapabilities(for: context.appName) {
-                                        Text("Strategy: \(getStrategyDescription(capabilities.automationStrategy))")
-                                            .font(.caption2)
-                                            .foregroundColor(.secondary)
-                                    }
-                                    
-                                    // Show last automation result if available
-                                    if !automationManager.lastAutomationResult.isEmpty {
-                                        Text(automationManager.lastAutomationResult)
-                                            .font(.caption2)
-                                            .foregroundColor(automationManager.lastAutomationResult.contains("Success") ? .green : .orange)
-                                            .multilineTextAlignment(.center)
-                                    }
-                                }
-                                .transition(.scale.combined(with: .opacity))
-                                .animation(.spring(response: 0.4, dampingFraction: 0.8), value: shouldWriteToApp)
-                            }
-                            
-                            // 🚀 NEW: Smart Action Buttons - Cursor-inspired interaction flow
-                            if showingActionButtons && !pendingActions.isEmpty {
-                                VStack(spacing: 8) {
-                                    Text("💡 Suggested Actions")
-                                        .font(.system(size: 12, weight: .medium))
-                                        .foregroundColor(.secondary)
-                                    
-                                    ForEach(pendingActions, id: \.id) { action in
-                                        Button(action: {
-                                            executeAction(action)
-                                        }) {
-                                            HStack {
-                                                Image(systemName: getActionIcon(for: action.actionType))
-                                                    .font(.system(size: 14, weight: .medium))
-                                                
-                                                VStack(alignment: .leading, spacing: 2) {
-                                                    Text(action.title)
-                                                        .font(.system(size: 14, weight: .medium))
-                                                    
-                                                    if !action.description.isEmpty {
-                                                        Text(action.description)
-                                                            .font(.system(size: 12))
-                                                            .foregroundColor(.secondary)
-                                                    }
-                                                }
-                                                
-                                                Spacer()
-                                                
-                                                Image(systemName: "arrow.right.circle.fill")
-                                                    .font(.system(size: 16))
-                                                    .foregroundColor(.blue)
-                                            }
-                                            .foregroundColor(.primary)
-                                            .padding(.horizontal, 16)
-                                            .padding(.vertical, 12)
-                                            .background(Color.clear)
-                                            .liquidGlassRect(cornerRadius: 12.0)
-                                            .overlay(
-                                                RoundedRectangle(cornerRadius: 12)
-                                                    .stroke(Color.blue.opacity(0.3), lineWidth: 1)
-                                            )
-                                        }
-                                        .buttonStyle(.plain)
-                                        .onHover { isHovered in
-                                            withAnimation(.easeInOut(duration: 0.2)) {
-                                                // Add hover effect if needed
-                                            }
-                                        }
-                                    }
-                                }
-                                .transition(.move(edge: .bottom).combined(with: .opacity))
-                                .animation(.spring(response: 0.5, dampingFraction: 0.8), value: showingActionButtons)
-                            }
-                        }
-                        
-                        Spacer(minLength: 0)
-                    }
-                    .padding(.horizontal, 20)
-                }
-                .frame(maxWidth: .infinity)
-                .clipped()
-                
-                if isLoading {
-                    LoadingIndicator(animation: .threeBallsTriangle, color: .white, size: .medium, speed: .normal)
-                }
-            }
-            .frame(maxWidth: .infinity, minHeight: 200, maxHeight: .infinity)
-        }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        // REMOVED: .background(Color.clear) // Transparent background for the window
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("ShowHotkeyInstructions"))) { _ in
             showingHotkeyInstructions = true
         }
@@ -608,21 +182,20 @@ struct ContentView: View {
             checkAndShowHotkeyInstructions()
             showProactiveGreeting()
         }
-        .onChange(of: speechManager.recognizedText) { newText in
-            // Auto-process speech when recognition stops and we have meaningful text
-            if !speechManager.isListening && !newText.isEmpty && isSpeechMode {
-                Task {
-                    await processSpeechInput()
-                }
-            }
-        }
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("AutoProcessSpeech"))) { notification in
-            if let speechText = notification.object as? String, isSpeechMode {
+            if let speechText = notification.object as? String, !speechText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                 print("🎤 Auto-processing speech: '\(speechText)'")
                 Task {
-                    await processSpeechInput()
+                    await processSpeechInput(speechText)
                 }
+            } else {
+                // This handles the case of a silence timeout with no speech.
+                print("🎤 Silence timeout, no speech detected. Exiting speech mode.")
+                isSpeechMode = false
             }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("StartSpeechMode"))) { _ in
+            enterSpeechMode()
         }
         .alert("Save Conversation History?", isPresented: $memoryManager.showingPermissionAlert) {
             Button("Allow") {
@@ -1008,6 +581,15 @@ struct ContentView: View {
     
     // MARK: - Universal Search Methods
     
+    private func search() async {
+        handleSearch()
+
+        // Wait for AI response to complete
+        while isLoading {
+            try? await Task.sleep(nanoseconds: 100_000_000) // 0.1 second
+        }
+    }
+
     private func handleSearch() {
         print("🚀 ENTER PRESSED - CURSOR-INSPIRED INTERACTION! Saving cats & dogs!")
         
@@ -2256,85 +1838,68 @@ struct ContentView: View {
     
     // MARK: - Speech Functions
     
+    // MARK: - Speech Recognition Helpers
+    
     private func enterSpeechMode() {
-        print("🎤 Entering Speech Mode - Saving 2000 cats!")
-        
-        guard speechManager.hasPermission else {
-            // Show permission alert
-            let alert = NSAlert()
-            alert.messageText = "Microphone Permission Required"
-            alert.informativeText = "Please grant microphone and speech recognition permissions to use voice input."
-            alert.addButton(withTitle: "Request Permissions")
-            alert.addButton(withTitle: "Cancel")
-            
-            if alert.runModal() == .alertFirstButtonReturn {
-                Task {
-                    await speechManager.requestPermissions()
-                }
-            }
-            return
-        }
-        
-        withAnimation(.easeInOut(duration: 0.3)) {
-            isSpeechMode = true
-        }
-        
-        // Clear previous speech text
-        speechManager.clearText()
-        
-        // Start speech recognition
-        Task {
-            await speechManager.startRecording()
+        isSpeechMode = true
+        if speechManager.isRecording {
+            speechManager.stopRecording()
+        } else {
+            searchText = "" // Clear text for new speech input
+            response = "Listening..."
+            responseText = "Listening..."
+            speechManager.startRecording()
         }
     }
     
-    private func handleSpeechToggle() {
-        if speechManager.isListening {
-            // Stop listening
+    private func exitSpeechMode() {
+        if speechManager.isRecording {
             speechManager.stopRecording()
-            Task {
-                await processSpeechInput()
-            }
+        }
+        isSpeechMode = false
+    }
+    
+    @MainActor
+    private func processSpeechInput(_ capturedText: String) async {
+        // Immediately switch back to the text input UI
+        isSpeechMode = false
+        // Show the transcribed text in the search bar
+        searchText = capturedText
+        
+        // Now, handle the search and spoken response
+        await handleSearchWithSpeechResponse()
+    }
+    
+    private func handleSpeechToggle() {
+        if speechManager.isRecording {
+            // Manually stop listening
+            speechManager.stopRecording()
         } else {
             // Start listening
-            Task {
-                await speechManager.startRecording()
-            }
+            enterSpeechMode()
         }
     }
     
     private func cancelSpeechMode() {
         print("🎤 Canceling Speech Mode")
-        
-        speechManager.cancelRecording()
-        
+
+        // Cancel recording first
+        speechManager.stopRecording()
+        speechManager.recognizedText = ""
+
+        // Exit speech mode with animation
         withAnimation(.easeInOut(duration: 0.3)) {
             isSpeechMode = false
         }
-    }
-    
-    private func processSpeechInput() async {
-        await MainActor.run {
-            let recognizedText = speechManager.recognizedText.trimmingCharacters(in: .whitespacesAndNewlines)
-            
-            guard !recognizedText.isEmpty else {
-                print("🎤 No speech recognized, staying in speech mode")
-                return
-            }
-            
-            print("🎤 Processing speech input: '\(recognizedText)'")
-            
-            // Set the search text to what was recognized
-            searchText = recognizedText
-            
-            // Exit speech mode but stay visible for response
-            withAnimation(.easeInOut(duration: 0.3)) {
-                isSpeechMode = false
-            }
-            
-            // Process the speech as if it was typed input
-            Task {
-                await handleSearchWithSpeechResponse()
+        
+        // Ensure clean state after cancellation
+        Task {
+            try? await Task.sleep(nanoseconds: 100_000_000) // 0.1 second
+            await MainActor.run {
+                // Double-check that we've exited speech mode completely
+                if !isSpeechMode && speechManager.isRecording {
+                    speechManager.stopRecording()
+                }
             }
         }
     }
@@ -2356,7 +1921,7 @@ struct ContentView: View {
             
             // Call TTS on main actor to avoid concurrency issues
             await MainActor.run {
-                speechManager.speak(cleanResponse)
+                speechManager.speak(text: cleanResponse)
             }
         }
     }
@@ -2385,7 +1950,356 @@ struct ContentView: View {
         return cleanResponse
     }
     
-
+    // 🎯 EXTRACTED: Main content view for cleaner code organization
+    private var mainContentView: some View {
+        VStack(spacing: 0) {
+            searchSection
+            
+            if selectedImage != nil || autoScreenshot != nil {
+                attachmentSection
+                    .transition(.asymmetric(
+                        insertion: .move(edge: .top).combined(with: .opacity).combined(with: .scale(scale: 0.9)),
+                        removal: .move(edge: .top).combined(with: .opacity).combined(with: .scale(scale: 0.9))
+                    ))
+            }
+            
+            // Show results section if we have search results OR AI response (not default greeting)
+            if showingUniversalResults || (!responseText.isEmpty && responseText != "How can I help you today?") {
+                resultsSection
+            }
+            
+            if isLoading {
+                LoadingIndicator(animation: .threeBallsTriangle, color: .white, size: .medium, speed: .normal)
+                    .padding(.top, 8)
+                    .transition(.asymmetric(
+                        insertion: .opacity.combined(with: .scale(scale: 0.8)),
+                        removal: .opacity.combined(with: .scale(scale: 0.8))
+                    ))
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        // REMOVED: .background(Color.clear)
+        // REMOVED: .liquidGlassSpotlight()
+        .animation(.spring(response: 0.5, dampingFraction: 0.8), value: showingActionButtons)
+        .animation(.spring(response: 0.4, dampingFraction: 0.8), value: isLoading)
+        .animation(.spring(response: 0.3, dampingFraction: 0.8), value: selectedImage != nil)
+        .animation(.spring(response: 0.3, dampingFraction: 0.8), value: autoScreenshot != nil)
+    }
+    
+    // Break down into smaller components
+    private var searchSection: some View {
+        searchInputArea
+    }
+    
+    private var searchInputArea: some View {
+        ZStack {
+            SearchBar(text: $searchText, onSubmit: handleSearch, onImageDrop: handleImageDrop, contextManager: contextManager)
+                .frame(maxWidth: .infinity)
+                .onChange(of: searchText) { newValue in
+                    handleUniversalSearchTextChange(newValue)
+                }
+                .opacity(isSpeechMode ? 0 : 1)
+                .disabled(isSpeechMode)
+            
+            if isSpeechMode {
+                SpeechAnimationView(speechManager: speechManager, onCancel: cancelSpeechMode)
+                    .frame(maxWidth: .infinity)
+                    .onTapGesture {
+                        handleSpeechToggle()
+                    }
+            }
+        }
+        .animation(.spring(response: 0.4, dampingFraction: 0.8), value: isSpeechMode)
+    }
+    
+    private var attachmentSection: some View {
+        HStack(spacing: 8) {
+            if let selectedImage = selectedImage {
+                attachmentIndicator(
+                    image: selectedImage,
+                    title: "Manual",
+                    color: .blue,
+                    action: { self.selectedImage = nil }
+                )
+            }
+            
+            if let autoScreenshot = autoScreenshot {
+                attachmentIndicator(
+                    image: autoScreenshot,
+                    title: "Auto-captured",
+                    color: .green,
+                    action: { self.autoScreenshot = nil }
+                )
+            }
+            
+            Spacer()
+        }
+        .padding(.horizontal, 18)
+        .padding(.bottom, 4)
+    }
+    
+    @ViewBuilder
+    private func attachmentIndicator(image: NSImage, title: String, color: Color, action: @escaping () -> Void) -> some View {
+        HStack(spacing: 4) {
+            Image(systemName: "camera.fill")
+                .font(.system(size: 8))
+                .foregroundColor(color)
+            
+            Image(nsImage: image)
+                .resizable()
+                .aspectRatio(contentMode: .fill)
+                .frame(width: 12, height: 12)
+                .cornerRadius(2)
+                .clipped()
+            
+            Text(title)
+                .font(.system(size: 7))
+                .foregroundColor(color)
+            
+            Button(action: action) {
+                Image(systemName: "xmark.circle.fill")
+                    .font(.system(size: 10))
+                    .foregroundColor(.secondary.opacity(0.6))
+            }
+            .buttonStyle(PlainButtonStyle())
+        }
+        .padding(.horizontal, 6)
+        .padding(.vertical, 2)
+        .background(
+            RoundedRectangle(cornerRadius: 6)
+                .fill(colorScheme == .light ? 
+                      Color.white.opacity(0.8) : 
+                      Color.black.opacity(0.4))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 6)
+                        .fill(color.opacity(0.08))
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 6)
+                        .stroke(color.opacity(0.2), lineWidth: 0.5)
+                )
+        )
+    }
+    
+    private var resultsSection: some View {
+        VStack(spacing: 0) {
+            ScrollView {
+                VStack(spacing: 16) {
+                    // Always show universal results when they exist and showingUniversalResults is true
+                    if showingUniversalResults && !universalSearchManager.searchResults.isEmpty {
+                        universalResultsView
+                            .transition(.asymmetric(
+                                insertion: .move(edge: .top).combined(with: .opacity),
+                                removal: .move(edge: .top).combined(with: .opacity)
+                            ))
+                    }
+                    
+                    // Show AI response if it's not the default greeting
+                    if !responseText.isEmpty && responseText != "How can I help you today?" {
+                        aiResponseView
+                            .transition(.asymmetric(
+                                insertion: .move(edge: .bottom).combined(with: .opacity),
+                                removal: .move(edge: .bottom).combined(with: .opacity)
+                            ))
+                    }
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 12)
+            }
+        }
+    }
+    
+    private var universalResultsView: some View {
+        VStack {
+            if !universalSearchManager.searchResults.isEmpty {
+                // Use the beautiful Spotlight-style AppSearchResultsView for applications
+                if let appResults = universalSearchManager.searchResults.first(where: { $0.category == .applications }),
+                   !appResults.results.isEmpty {
+                    
+                    // Convert UniversalSearchResult to AppInfo for the Spotlight-style view
+                    let appInfoResults = appResults.results.map { result in
+                        AppInfo(
+                            name: result.name,
+                            path: result.path,
+                            bundleIdentifier: result.bundleIdentifier ?? "",
+                            icon: result.icon,
+                            version: extractVersionFromPath(result.path)
+                        )
+                    }
+                    
+                    AppSearchResultsView(
+                        apps: appInfoResults,
+                        onAppSelected: { appInfo in
+                            // Convert back to UniversalSearchResult for handler
+                            if let originalResult = appResults.results.first(where: { $0.path == appInfo.path }) {
+                                handleUniversalResultSelection(originalResult)
+                            }
+                        }
+                    )
+                    
+                } else {
+                    // For non-app results, use the original view
+                    UniversalSearchResultsView(
+                        categoryResults: universalSearchManager.searchResults,
+                        onResultSelected: handleUniversalResultSelection
+                    )
+                }
+                
+                if !searchText.isEmpty {
+                    Button("Ask AI instead: \"\(searchText)\"") {
+                        generateResponse()
+                    }
+                    .foregroundColor(.white)
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 8)
+                    .liquidGlassActionButton(colors: [.blue, .cyan])
+                    .buttonStyle(.plain)
+                }
+            }
+        }
+    }
+    
+    // Helper function to extract version from app path
+    private func extractVersionFromPath(_ path: String) -> String? {
+        // Try to get version from bundle info
+        if let bundle = Bundle(path: path),
+           let version = bundle.infoDictionary?["CFBundleShortVersionString"] as? String {
+            return version
+        }
+        return nil
+    }
+    
+    private var aiResponseView: some View {
+        VStack(spacing: 12) {
+            ZStack(alignment: .topTrailing) {
+                Text(response)
+                    .font(.system(size: 14, weight: .regular))
+                    .lineLimit(nil)
+                    .multilineTextAlignment(.leading)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .textSelection(.enabled)
+                    .padding(12)
+                    .background(
+                        RoundedRectangle(cornerRadius: 12)
+                            .fill(colorScheme == .light ? 
+                                  Color.white.opacity(0.8) : 
+                                  Color.black.opacity(0.4))
+                            .shadow(
+                                color: colorScheme == .light ? 
+                                       Color.black.opacity(0.1) : 
+                                       Color.clear, 
+                                radius: 8, 
+                                x: 0, 
+                                y: 2
+                            )
+                    )
+                
+                Button(action: copyResponse) {
+                    Image(systemName: isCopied ? "checkmark" : "doc.on.doc")
+                        .foregroundColor(isCopied ? .green : .primary.opacity(0.7))
+                        .font(.system(size: 12, weight: .medium))
+                        .padding(4)
+                }
+                .buttonStyle(PlainButtonStyle())
+                .padding(.top, 6)
+                .padding(.trailing, 6)
+            }
+            
+            if showingActionButtons {
+                actionButtonsView
+                    .transition(.asymmetric(
+                        insertion: .move(edge: .bottom).combined(with: .opacity).combined(with: .scale(scale: 0.95)),
+                        removal: .move(edge: .bottom).combined(with: .opacity).combined(with: .scale(scale: 0.95))
+                    ))
+            }
+        }
+    }
+    
+    private var actionButtonsView: some View {
+        VStack(spacing: 8) {
+            if shouldWriteToApp, let context = contextManager.currentContext {
+                Button(action: writeToCurrentApp) {
+                    HStack {
+                        if automationManager.isAutomating {
+                            ProgressView()
+                                .scaleEffect(0.7)
+                        } else {
+                            Image(systemName: getAutomationIcon(for: context.appName))
+                                .font(.system(size: 12))
+                        }
+                        
+                        Text(automationManager.isAutomating ? "Writing..." : "Write to \(context.appName)")
+                            .font(.system(size: 12, weight: .medium))
+                    }
+                    .foregroundColor(.white)
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 8)
+                    .background(
+                        RoundedRectangle(cornerRadius: 16)
+                            .fill(
+                                LinearGradient(
+                                    gradient: Gradient(colors: getAutomationColors(for: context.appName)),
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                )
+                            )
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 16)
+                                    .fill(.ultraThinMaterial)
+                                    .opacity(0.2)
+                            )
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 16)
+                                    .fill(
+                                        LinearGradient(
+                                            gradient: Gradient(colors: [
+                                                Color.white.opacity(0.2),
+                                                Color.clear
+                                            ]),
+                                            startPoint: .topLeading,
+                                            endPoint: .center
+                                        )
+                                    )
+                            )
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 16)
+                                    .stroke(Color.white.opacity(0.15), lineWidth: 0.5)
+                            )
+                    )
+                }
+                .buttonStyle(.plain)
+                .disabled(automationManager.isAutomating)
+            }
+            
+            ForEach(pendingActions) { action in
+                Button(action.title) {
+                    executeAction(action)
+                }
+                .foregroundColor(.primary)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+                .background(
+                    RoundedRectangle(cornerRadius: 8)
+                        .fill(colorScheme == .light ? 
+                              Color.white.opacity(0.8) : 
+                              Color.black.opacity(0.4))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 8)
+                                .stroke(Color.white.opacity(0.2), lineWidth: 0.5)
+                        )
+                        .shadow(
+                            color: colorScheme == .light ? 
+                                   Color.black.opacity(0.1) : 
+                                   Color.clear, 
+                            radius: 8, 
+                            x: 0, 
+                            y: 2
+                        )
+                )
+                .buttonStyle(.plain)
+            }
+        }
+    }
 }
 
 #Preview {

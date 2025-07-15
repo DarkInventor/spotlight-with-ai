@@ -1,131 +1,255 @@
 import SwiftUI
 
-// MARK: - Apple's Real Liquid Glass APIs (macOS 26+)
-// Using the actual Apple Liquid Glass APIs since they're available
+// MARK: - Modern Spotlight Liquid Glass Effects
+// Creating sophisticated glass effects that match the new macOS Spotlight design
 
 extension View {
-    /// Apply Apple's Liquid Glass effect with default settings
-    func applyLiquidGlass() -> some View {
-        self.glassEffect()
+    /// Search bar liquid glass effect - enhanced for modern Spotlight with refined colors
+    @ViewBuilder
+    func liquidGlassSearchBar() -> some View {
+        self.background {
+            ZStack {
+                // Base material with enhanced blur - matching app search results
+                RoundedRectangle(cornerRadius: 12)
+                    .fill(.ultraThinMaterial)
+                
+                // Enhanced background fill matching AppSearchResultsView
+                RoundedRectangle(cornerRadius: 12)
+                    .fill(.regularMaterial)
+                
+                // Subtle inner shadow simulation
+                RoundedRectangle(cornerRadius: 12)
+                    .fill(Color.black.opacity(0.02))
+                    .blur(radius: 1)
+                    .offset(y: 1)
+            }
+        }
+        .shadow(
+            color: Color.black.opacity(0.10), 
+            radius: 16, 
+            x: 0, 
+            y: 6
+        )
     }
     
-    /// Apply Liquid Glass with custom shape
-    func applyLiquidGlass(in shape: some Shape) -> some View {
-        self.glassEffect(in: shape)
+    /// Results container liquid glass effect - matching app search results
+    @ViewBuilder
+    func liquidGlassResults() -> some View {
+        self.background {
+            ZStack {
+                // Base material matching AppSearchResultsView exactly
+                RoundedRectangle(cornerRadius: 12)
+                    .fill(.regularMaterial)
+                    .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12))
+            }
+        }
+        .environment(\.colorScheme, .light)
+        .shadow(
+            color: Color.black.opacity(0.1), 
+            radius: 8, 
+            x: 0, 
+            y: 2
+        )
     }
     
-    /// Interactive Liquid Glass with tint (Apple's real API)
-    func interactiveLiquidGlass(tint: Color = .blue) -> some View {
-        self.glassEffect(.regular.tint(tint).interactive())
+    /// Button liquid glass effect with interactive states - refined colors
+    @ViewBuilder
+    func liquidGlassButton(isPressed: Bool = false) -> some View {
+        self.background {
+            ZStack {
+                // Base material matching the refined approach
+                RoundedRectangle(cornerRadius: 8)
+                    .fill(.ultraThinMaterial)
+                
+                // Interactive hover state matching AppSearchResultsView
+                RoundedRectangle(cornerRadius: 8)
+                    .fill(
+                        isPressed ? 
+                        Color.blue.opacity(0.08) : 
+                        Color.clear
+                    )
+                
+                // Subtle border
+                RoundedRectangle(cornerRadius: 8)
+                    .stroke(
+                        Color.white.opacity(isPressed ? 0.4 : 0.2),
+                        lineWidth: 0.5
+                    )
+            }
+        }
+        .scaleEffect(isPressed ? 0.98 : 1.0)
+        .animation(.easeInOut(duration: 0.1), value: isPressed)
     }
     
-    /// Rounded rectangle Liquid Glass
-    func liquidGlassRect(cornerRadius: CGFloat = 16.0) -> some View {
-        self.glassEffect(in: .rect(cornerRadius: cornerRadius))
+    /// Attachment indicator liquid glass - refined
+    @ViewBuilder
+    func liquidGlassAttachment(color: Color = .blue) -> some View {
+        self.background {
+            ZStack {
+                // Base material
+                RoundedRectangle(cornerRadius: 6)
+                    .fill(.ultraThinMaterial)
+                
+                // Color tint with refined opacity
+                RoundedRectangle(cornerRadius: 6)
+                    .fill(color.opacity(0.08))
+                
+                // Subtle border
+                RoundedRectangle(cornerRadius: 6)
+                    .stroke(color.opacity(0.2), lineWidth: 0.5)
+            }
+        }
     }
     
-    /// Capsule Liquid Glass
-    func liquidGlassCapsule() -> some View {
-        self.glassEffect(in: .capsule)
-    }
-}
-
-// MARK: - Glass Variants (Real Apple APIs)
-extension View {
-    /// Ultra-thin Liquid Glass
-    func ultraThinLiquidGlass() -> some View {
-        self.glassEffect()
-    }
-    
-    /// Regular Liquid Glass (default)
-    func regularLiquidGlass() -> some View {
-        self.glassEffect()
-    }
-    
-    /// Thick Liquid Glass
-    func thickLiquidGlass() -> some View {
-        self.glassEffect()
-    }
-}
-
-// MARK: - Tinted Interactive Glass (Real Apple APIs)
-extension View {
-    /// Blue tinted interactive Liquid Glass
-    func blueLiquidGlass() -> some View {
-        self.glassEffect()
-    }
-    
-    /// Green tinted interactive Liquid Glass
-    func greenLiquidGlass() -> some View {
-        self.glassEffect()
-    }
-    
-    /// Orange tinted interactive Liquid Glass
-    func orangeLiquidGlass() -> some View {
-        self.glassEffect()
-    }
-    
-    /// Purple tinted interactive Liquid Glass
-    func purpleLiquidGlass() -> some View {
-        self.glassEffect()
+    /// Action button liquid glass with gradient - enhanced colors
+    @ViewBuilder
+    func liquidGlassActionButton(colors: [Color]) -> some View {
+        self.background {
+            ZStack {
+                // Base gradient
+                RoundedRectangle(cornerRadius: 16)
+                    .fill(
+                        LinearGradient(
+                            gradient: Gradient(colors: colors),
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                    )
+                
+                // Glass overlay with refined opacity
+                RoundedRectangle(cornerRadius: 16)
+                    .fill(.ultraThinMaterial)
+                    .opacity(0.2)
+                
+                // Highlight
+                RoundedRectangle(cornerRadius: 16)
+                    .fill(
+                        LinearGradient(
+                            gradient: Gradient(colors: [
+                                Color.white.opacity(0.2),
+                                Color.clear
+                            ]),
+                            startPoint: .topLeading,
+                            endPoint: .center
+                        )
+                    )
+                
+                // Border
+                RoundedRectangle(cornerRadius: 16)
+                    .stroke(Color.white.opacity(0.15), lineWidth: 0.5)
+            }
+        }
     }
     
-    /// Red tinted interactive Liquid Glass
-    func redLiquidGlass() -> some View {
-        self.glassEffect()
-    }
-}
-
-// MARK: - Apple's GlassEffectContainer
-struct LiquidGlassContainer<Content: View>: View {
-    let spacing: CGFloat
-    let content: Content
-    
-    init(spacing: CGFloat = 20.0, @ViewBuilder content: () -> Content) {
-        self.spacing = spacing
-        self.content = content()
-    }
-    
-    var body: some View {
-        GlassEffectContainer(spacing: spacing) {
-            content
+    /// Divider liquid glass effect - refined
+    @ViewBuilder
+    func liquidGlassDivider() -> some View {
+        self.background {
+            Rectangle()
+                .fill(
+                    LinearGradient(
+                        gradient: Gradient(colors: [
+                            Color.clear,
+                            Color.primary.opacity(0.1),
+                            Color.clear
+                        ]),
+                        startPoint: .leading,
+                        endPoint: .trailing
+                    )
+                )
+                .frame(height: 1)
         }
     }
 }
 
-// MARK: - Glass Button Style
+// MARK: - Advanced Liquid Glass Effects with Refined Colors
 extension View {
-    func glassButtonStyle() -> some View {
-        self.buttonStyle(.glass)
+    /// Morphing liquid glass with animation support - enhanced
+    @ViewBuilder
+    func liquidGlassMorphing(id: String, in namespace: Namespace.ID) -> some View {
+        self.background {
+            ZStack {
+                RoundedRectangle(cornerRadius: 12)
+                    .fill(.regularMaterial)
+                    .matchedGeometryEffect(id: "\(id)-background", in: namespace)
+                
+                RoundedRectangle(cornerRadius: 12)
+                    .fill(
+                        LinearGradient(
+                            gradient: Gradient(colors: [
+                                Color.white.opacity(0.08),
+                                Color.clear
+                            ]),
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                    )
+                    .matchedGeometryEffect(id: "\(id)-overlay", in: namespace)
+                
+                RoundedRectangle(cornerRadius: 12)
+                    .stroke(Color.white.opacity(0.15), lineWidth: 0.5)
+                    .matchedGeometryEffect(id: "\(id)-border", in: namespace)
+            }
+        }
+    }
+    
+    /// Interactive liquid glass with hover effects - refined colors
+    @ViewBuilder
+    func liquidGlassInteractive(isHovered: Bool = false) -> some View {
+        self.background {
+            ZStack {
+                RoundedRectangle(cornerRadius: 12)
+                    .fill(.regularMaterial)
+                
+                RoundedRectangle(cornerRadius: 12)
+                    .fill(
+                        isHovered ? 
+                        Color.blue.opacity(0.08) : 
+                        Color.clear
+                    )
+                
+                RoundedRectangle(cornerRadius: 12)
+                    .stroke(
+                        Color.white.opacity(isHovered ? 0.2 : 0.1),
+                        lineWidth: isHovered ? 1 : 0.5
+                    )
+            }
+        }
+        .animation(.easeInOut(duration: 0.2), value: isHovered)
     }
 }
 
-// MARK: - Advanced Liquid Glass with Morphing
+// MARK: - Specialized Spotlight Components with Refined Colors
 extension View {
-    /// Liquid Glass with ID for morphing transitions
-    func liquidGlassWithID(_ id: String, in namespace: Namespace.ID) -> some View {
-        self
-            .glassEffect()
-            .glassEffectID(id, in: namespace)
-    }
-    
-    /// Liquid Glass union for combining multiple effects
-    func liquidGlassUnion(id: String, namespace: Namespace.ID) -> some View {
-        self
-            .glassEffect()
-            .glassEffectUnion(id: id, namespace: namespace)
+    /// Individual result item - matching AppSearchResultsView
+    @ViewBuilder
+    func spotlightResultItem(isSelected: Bool = false) -> some View {
+        self.liquidGlassInteractive(isHovered: isSelected)
     }
 }
 
-// MARK: - Backward Compatibility (for older versions that might not have Liquid Glass)
+// MARK: - Backward Compatibility with Enhanced Colors
 extension View {
-    /// Fallback glass effect using materials
-    func fallbackGlass() -> some View {
-        self.background(.ultraThinMaterial, in: .rect(cornerRadius: 0))
+    /// Backward compatibility for existing code
+    @ViewBuilder
+    func applyLiquidGlass() -> some View {
+        self.liquidGlassSearchBar()
     }
     
-    /// Fallback glass with shape
-    func fallbackGlass(in shape: some InsettableShape) -> some View {
-        self.background(.ultraThinMaterial, in: shape)
+    /// Backward compatibility with shape parameter
+    @ViewBuilder
+    func applyLiquidGlass(in shape: some Shape) -> some View {
+        self.background(.regularMaterial, in: shape)
+    }
+} 
+
+// MARK: - Backward Compatibility for liquidGlassRect with refined colors
+extension View {
+    @ViewBuilder
+    func liquidGlassRect(cornerRadius: CGFloat = 16.0) -> some View {
+        self.background(
+            RoundedRectangle(cornerRadius: cornerRadius)
+                .fill(.regularMaterial)
+        )
     }
 } 

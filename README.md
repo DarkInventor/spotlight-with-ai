@@ -13,7 +13,7 @@ SearchFast is a revolutionary macOS application that combines the power of AI wi
 ## ✨ Key Features
 
 ### 🔥 **Automatic Context Intelligence**
-- **Auto-Screenshot Capture**: Automatically captures your screen when you open SearchFast (Cmd+Shift+Space)
+- **Auto-Screenshot Capture**: Automatically sees your screen when you open SearchFast (Cmd+Shift+Space)
 - **Smart Context Awareness**: Understands what app you're using and what you're working on
 - **Proactive Suggestions**: Provides intelligent, context-aware suggestions based on your current activity
 
